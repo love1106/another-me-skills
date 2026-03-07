@@ -1,0 +1,24 @@
+[
+  {
+    "name": "greeting",
+    "description": "Chào hỏi thông minh theo ngữ cảnh: thời gian, ngày lễ, mood của user. Tạo first impression tốt.",
+    "version": "1.0.0",
+    "author": "admin",
+    "tags": [
+      "social",
+      "personality"
+    ],
+    "updatedAt": "2026-03-07"
+  },
+  {
+    "name": "weather",
+    "description": "Tra cứu thời tiết và dự báo qua wttr.in hoặc Open-Meteo. Hỗ trợ mọi địa điểm, không cần API key.",
+    "version": "1.0.0",
+    "author": "admin",
+    "tags": [
+      "utility",
+      "weather"
+    ],
+    "updatedAt": "2026-03-07"
+  }
+]

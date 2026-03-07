@@ -1,0 +1,8 @@
+{
+  "name": "greeting",
+  "description": "Chào hỏi thông minh theo ngữ cảnh: thời gian, ngày lễ, mood của user. Tạo first impression tốt.",
+  "version": "1.0.0",
+  "author": "admin",
+  "tags": ["social", "personality"],
+  "updatedAt": "2026-03-07"
+}
