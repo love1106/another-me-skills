@@ -1,13 +1,10 @@
 [
   {
     "name": "greeting",
-    "description": "Ch\u00e0o h\u1ecfi th\u00f4ng minh theo ng\u1eef c\u1ea3nh: th\u1eddi gian, ng\u00e0y l\u1ec5, mood c\u1ee7a user. T\u1ea1o first impression t\u1ed1t.",
+    "description": "Chào hỏi thông minh theo ngữ cảnh: thời gian, ngày lễ, mood của user. Tạo first impression tốt.",
     "version": "1.0.0",
     "author": "admin",
-    "tags": [
-      "social",
-      "personality"
-    ],
+    "tags": ["social", "personality"],
     "updatedAt": "2026-03-07"
   },
   {
@@ -15,23 +12,22 @@
     "version": "1.0.0",
     "description": "Build stunning landing pages with Next.js 15, Framer Motion, and Tailwind CSS. Includes modern design patterns, scroll animations, and responsive layouts.",
     "author": "hubcom",
-    "tags": [
-      "frontend",
-      "landing-page",
-      "framer-motion",
-      "nextjs",
-      "design"
-    ]
+    "tags": ["frontend", "landing-page", "framer-motion", "nextjs", "design"]
+  },
+  {
+    "name": "my-devices",
+    "description": "Điều khiển thiết bị (PC, laptop, Mac) của user qua SSH. Đọc devices.json để biết thiết bị online, dùng SSH để chạy lệnh, transfer file.",
+    "version": "1.0.0",
+    "author": "hubcom",
+    "tags": ["device", "ssh", "remote-control"],
+    "updatedAt": "2026-03-11"
   },
   {
     "name": "weather",
-    "description": "Tra c\u1ee9u th\u1eddi ti\u1ebft v\u00e0 d\u1ef1 b\u00e1o qua wttr.in ho\u1eb7c Open-Meteo. H\u1ed7 tr\u1ee3 m\u1ecdi \u0111\u1ecba \u0111i\u1ec3m, kh\u00f4ng c\u1ea7n API key.",
+    "description": "Tra cứu thời tiết và dự báo qua wttr.in hoặc Open-Meteo. Hỗ trợ mọi địa điểm, không cần API key.",
     "version": "1.0.0",
     "author": "admin",
-    "tags": [
-      "utility",
-      "weather"
-    ],
+    "tags": ["utility", "weather"],
     "updatedAt": "2026-03-07"
   }
 ]
