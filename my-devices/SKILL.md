@@ -15,59 +15,55 @@ Skill này cho phép bạn kết nối và điều khiển các thiết bị (PC
 cat ~/.openclaw/devices.json
 ```
 
-File này chứa danh sách thiết bị đã liên kết, cập nhật tự động mỗi 2 phút:
+File này chứa danh sách thiết bị đã liên kết, cập nhật tự động mỗi 2 phút.
 
-```json
-{
-  "devices": [
-    {
-      "id": "uuid",
-      "name": "DESKTOP-DSIH059",
-      "platform": "windows",
-      "ip": "100.123.151.70",
-      "sshUser": "PC",
-      "status": "online"
-    }
-  ],
-  "updatedAt": "2026-03-11T09:00:00Z"
-}
-```
+## Bước 2: Kiểm tra trước khi SSH
 
-## Bước 2: SSH vào thiết bị
+**BẮT BUỘC**: Kiểm tra `status` trong devices.json TRƯỚC khi SSH:
+- `"status": "online"` → OK, tiến hành SSH
+- `"status": "offline"` → **KHÔNG SSH**. Báo user ngay: "Thiết bị [tên] đang offline. Kiểm tra xem máy có bật và kết nối mạng không."
 
-Dùng SSH key có sẵn để kết nối:
+## Bước 3: SSH vào thiết bị
+
+**LUÔN dùng timeout 5 giây** để tránh chờ lâu:
 
 ```bash
-ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 {sshUser}@{ip} "{command}"
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 {sshUser}@{ip} "{command}"
 ```
+
+### Xử lý kết quả SSH
+
+- **Thành công** (exit 0) → hiển thị output cho user
+- **Connection refused / timeout** (exit 255) → báo user ngay: "Không kết nối được tới thiết bị. Có thể máy đang tắt hoặc mất mạng."
+- **KHÔNG retry nhiều lần** — nếu fail lần đầu, báo user luôn. Không thử lại quá 1 lần.
 
 ### Ví dụ thực tế
 
 ```bash
 # Check hostname + user
-ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 PC@100.123.151.70 "hostname && whoami"
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 PC@100.123.151.70 "hostname && whoami"
 
 # Xem file trên Desktop (Windows)
-ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 PC@100.123.151.70 "dir C:\Users\PC\Desktop"
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 PC@100.123.151.70 "dir C:\Users\PC\Desktop"
 
 # System info (Windows)
-ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 PC@100.123.151.70 "systeminfo | findstr /B /C:\"OS\" /C:\"Total Physical\""
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 PC@100.123.151.70 "systeminfo | findstr /B /C:\"OS\" /C:\"Total Physical\""
 
 # Chạy PowerShell command
-ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 PC@100.123.151.70 "powershell -Command 'Get-Process | Select -First 10'"
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 PC@100.123.151.70 "powershell -Command 'Get-Process | Select -First 10'"
 
 # Mở app (Windows)  
-ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 PC@100.123.151.70 "start chrome"
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519 PC@100.123.151.70 "start chrome"
 ```
 
 ## File Transfer (scp)
 
 ```bash
 # Upload file lên thiết bị
-scp -o StrictHostKeyChecking=no -i ~/.openclaw/.ssh/id_ed25519 /local/file {sshUser}@{ip}:/remote/path
+scp -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.openclaw/.ssh/id_ed25519 /local/file {sshUser}@{ip}:/remote/path
 
 # Download file từ thiết bị
-scp -o StrictHostKeyChecking=no -i ~/.openclaw/.ssh/id_ed25519 {sshUser}@{ip}:/remote/file /local/path
+scp -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.openclaw/.ssh/id_ed25519 {sshUser}@{ip}:/remote/file /local/path
 ```
 
 ## Platform Notes
@@ -85,12 +81,6 @@ scp -o StrictHostKeyChecking=no -i ~/.openclaw/.ssh/id_ed25519 {sshUser}@{ip}:/r
 ### Linux
 - Shell: `bash`
 - Mở app: `xdg-open /path/to/file`
-
-## Xử lý lỗi
-
-- Device `status: "offline"` → báo user thiết bị đang offline
-- SSH timeout → báo thiết bị không phản hồi, suggest kiểm tra mạng
-- Permission denied → SSH key chưa được cài, cần liên kết lại
 
 ## Bảo mật
 
