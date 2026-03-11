@@ -66,6 +66,61 @@ scp -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.openclaw/.ssh/id_ed255
 scp -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.openclaw/.ssh/id_ed25519 {sshUser}@{ip}:/remote/file /local/path
 ```
 
+## Screenshot — Chụp màn hình thiết bị
+
+Chụp screenshot từ xa → kéo ảnh về → phân tích bằng vision model.
+
+### Chụp
+
+**Mac:**
+```bash
+ssh {SSH_OPTS} {user}@{ip} "screencapture -x /tmp/am-screenshot.png"
+```
+
+**Linux (X11):**
+```bash
+ssh {SSH_OPTS} {user}@{ip} "DISPLAY=:0 import -window root /tmp/am-screenshot.png"
+```
+Nếu `import` không có, thử: `DISPLAY=:0 scrot /tmp/am-screenshot.png`
+
+**Windows:**
+```bash
+ssh {SSH_OPTS} {user}@{ip} "powershell -Command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen | ForEach-Object { \\\$b = New-Object Drawing.Bitmap(\\\$_.Bounds.Width, \\\$_.Bounds.Height); [Drawing.Graphics]::FromImage(\\\$b).CopyFromScreen(\\\$_.Bounds.Location, [Drawing.Point]::Empty, \\\$_.Bounds.Size); \\\$b.SavePng('C:\\Users\\{user}\\am-screenshot.png') }\""
+```
+
+Hoặc đơn giản hơn với `nircmd` (nếu có):
+```bash
+ssh {SSH_OPTS} {user}@{ip} "nircmd savescreenshot C:\\Users\\{user}\\am-screenshot.png"
+```
+
+### Kéo ảnh về
+
+```bash
+scp {SCP_OPTS} {user}@{ip}:/tmp/am-screenshot.png /tmp/am-screenshot.png
+```
+Windows: `scp {SCP_OPTS} {user}@{ip}:C:/Users/{user}/am-screenshot.png /tmp/am-screenshot.png`
+
+### Phân tích
+
+Dùng tool `image` để phân tích screenshot:
+```
+image(image="/tmp/am-screenshot.png", prompt="Describe what's on screen")
+```
+
+### Dọn dẹp
+Sau khi phân tích, xóa file tạm:
+```bash
+ssh {SSH_OPTS} {user}@{ip} "rm /tmp/am-screenshot.png"
+rm /tmp/am-screenshot.png
+```
+
+### SSH_OPTS shorthand
+Trong tất cả commands trên:
+```
+SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519"
+SCP_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.openclaw/.ssh/id_ed25519"
+```
+
 ## Platform Notes
 
 ### Windows
