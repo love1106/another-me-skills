@@ -2,21 +2,17 @@
 
 Build landing pages that convert. Modern design, smooth animations, mobile-first.
 
-## Stack
+## Stack & Dependencies
 
 - **Next.js 15** (App Router)
-- **Tailwind CSS 4** (utility-first styling)
+- **Tailwind CSS** (utility-first styling)
 - **Framer Motion** (scroll animations, transitions, gestures)
 - **Lucide React** (icons)
+- **shadcn/ui** (UI components: Button, Card, etc.) — hoặc custom components
+- **clsx + tailwind-merge** (cho utility `cn()` — merge Tailwind classes)
 - **Inter / Plus Jakarta Sans** (typography via next/font)
 
-## Setup
-
-```bash
-npx create-next-app@latest landing --typescript --tailwind --app --src-dir
-cd landing
-npm install framer-motion lucide-react
-```
+> **Note:** Các component patterns dùng `cn()`, `<Button>`, CSS variables (`bg-card`, `text-muted-foreground`) từ shadcn/ui. Nếu project không dùng shadcn/ui, thay bằng Tailwind classes trực tiếp.
 
 ## Design Principles
 
@@ -121,7 +117,7 @@ function ScrollProgress() {
 ### Counter Animation (for stats)
 ```tsx
 import { useInView, useMotionValue, useTransform, animate } from "framer-motion";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: string }) {
   const ref = useRef(null);
@@ -198,13 +194,15 @@ export function Navbar() {
   const { scrollY } = useScroll();
   const bgOpacity = useTransform(scrollY, [0, 100], [0, 0.8]);
   const borderOpacity = useTransform(scrollY, [0, 100], [0, 0.1]);
+  const bg = useTransform(bgOpacity, (v) => `rgba(0,0,0,${v})`);
+  const border = useTransform(borderOpacity, (v) => `1px solid rgba(255,255,255,${v})`);
 
   return (
     <motion.header
       className="fixed top-0 inset-x-0 z-50"
       style={{
-        backgroundColor: useTransform(bgOpacity, (v) => `rgba(0,0,0,${v})`),
-        borderBottom: useTransform(borderOpacity, (v) => `1px solid rgba(255,255,255,${v})`),
+        backgroundColor: bg,
+        borderBottom: border,
         backdropFilter: "blur(12px)",
       }}
     >
@@ -446,6 +444,76 @@ Element spacing:  space-y-4 or space-y-6
 <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-8">
   Content
 </div>
+```
+
+## SEO & Meta Tags
+
+```tsx
+// app/layout.tsx
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Product Name — Tagline",
+  description: "Concise description under 160 chars for search results.",
+  openGraph: {
+    title: "Product Name — Tagline",
+    description: "Description for social sharing.",
+    url: "https://example.com",
+    siteName: "Product Name",
+    images: [{ url: "/og.png", width: 1200, height: 630 }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Product Name — Tagline",
+    description: "Description for Twitter.",
+    images: ["/og.png"],
+  },
+};
+```
+
+## Mobile Menu
+
+```tsx
+"use client";
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Menu, X } from "lucide-react";
+
+function MobileMenu({ links }: { links: { href: string; label: string }[] }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="md:hidden">
+      <button onClick={() => setOpen(!open)} aria-label="Toggle menu">
+        {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute top-full left-0 right-0 border-b bg-background/95 backdrop-blur-lg p-6"
+          >
+            <nav className="flex flex-col gap-4">
+              {links.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setOpen(false)}
+                  className="text-lg font-medium"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 ```
 
 ## Checklist Before Delivery
