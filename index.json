@@ -1,39 +1,12 @@
 [
   {
-    "slug": "am-weather",
-    "name": "Weather",
-    "description": "Tra cứu thời tiết hiện tại và dự báo cho bất kỳ địa điểm nào",
-    "category": "utility",
-    "tags": ["weather", "forecast"],
-    "repo_path": "am-weather",
-    "version": "1.0.0"
-  },
-  {
-    "slug": "am-greeting",
-    "name": "Greeting",
-    "description": "Chào hỏi thông minh, tạo ấn tượng đầu tiên tốt với user",
-    "category": "built-in",
-    "tags": ["greeting", "onboarding"],
-    "repo_path": "am-greeting",
-    "version": "1.0.0"
-  },
-  {
-    "slug": "am-claude-code",
-    "name": "Claude Code CLI",
-    "description": "Spawn Claude Code CLI cho task nhỏ, nhanh — review, test, quick edit",
-    "category": "developer",
-    "tags": ["coding", "claude", "cli"],
-    "repo_path": "am-claude-code",
-    "version": "1.0.0"
-  },
-  {
     "slug": "am-coding",
     "name": "Coding",
-    "description": "Development skill — code, review, fix bugs trên repo local hoặc device qua SSH",
+    "description": "Developer workflow cho mọi coding tasks — spawn Claude Code CLI, planning, branching, verification pipeline, PR. Bao gồm cả quick tasks lẫn complex features.",
     "category": "developer",
-    "tags": ["coding", "development", "git"],
+    "tags": ["coding", "development", "git", "claude", "cli"],
     "repo_path": "am-coding",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   {
     "slug": "am-devices",

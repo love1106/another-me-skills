@@ -1,8 +1,0 @@
-{
-  "name": "weather",
-  "description": "Tra cứu thời tiết và dự báo qua wttr.in hoặc Open-Meteo. Hỗ trợ mọi địa điểm, không cần API key.",
-  "version": "1.0.0",
-  "author": "admin",
-  "tags": ["utility", "weather"],
-  "updatedAt": "2026-03-07"
-}
