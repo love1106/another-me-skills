@@ -1,7 +1,0 @@
-{
-  "name": "landing-page-builder",
-  "version": "1.0.0",
-  "description": "Build stunning landing pages with Next.js 15, Framer Motion, and Tailwind CSS. Includes modern design patterns, scroll animations, and responsive layouts.",
-  "author": "hubcom",
-  "tags": ["frontend", "landing-page", "framer-motion", "nextjs", "design"]
-}

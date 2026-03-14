@@ -1,13 +1,4 @@
----
-name: landing-page-builder
-description: >
-  Build stunning, modern landing pages with Next.js 15, Framer Motion, and Tailwind CSS.
-  Use when: creating landing pages, marketing pages, product pages, or any page
-  that needs to impress visitors with beautiful design and smooth animations.
-  NOT for: dashboards, admin panels, CRUD apps, or data-heavy interfaces.
----
-
-# Landing Page Builder
+# Landing Page Builder — Reference
 
 Build landing pages that convert. Modern design, smooth animations, mobile-first.
 

@@ -516,6 +516,26 @@ git diff --cached --quiet || git commit -m "fix: address PR review feedback"
 git push origin <feature-branch>
 ```
 
+## References (đọc khi cần, KHÔNG load mặc định)
+
+Reference files cung cấp domain knowledge cho các loại task cụ thể. **Chỉ đọc khi task match**, không load sẵn để tiết kiệm token.
+
+| Reference | Khi nào đọc | Path |
+|-----------|-------------|------|
+| Landing Page | User yêu cầu build landing page, marketing page, product page | `references/landing-page.md` |
+
+**Cách dùng:**
+1. Detect task type từ yêu cầu user
+2. Đọc reference file tương ứng (nếu có)
+3. Inject nội dung relevant vào prompt cho Claude CLI (Bước 4)
+
+```
+# Ví dụ: inject landing page reference vào Claude CLI prompt
+read references/landing-page.md → extract patterns cần thiết → nhúng vào prompt
+```
+
+> 💡 Thêm reference mới bằng cách tạo file trong `references/`. Update bảng trên.
+
 ## Deploy/Preview (khi user yêu cầu)
 
 Agent **KHÔNG tự deploy** trừ khi user yêu cầu rõ ràng.

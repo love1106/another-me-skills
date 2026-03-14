@@ -16,14 +16,5 @@
     "tags": ["devices", "ssh", "remote"],
     "repo_path": "am-devices",
     "version": "1.0.0"
-  },
-  {
-    "slug": "am-landing-page-builder",
-    "name": "Landing Page Builder",
-    "description": "Build landing pages với Next.js, Framer Motion, Tailwind — modern design, smooth animations",
-    "category": "developer",
-    "tags": ["nextjs", "landing-page", "design"],
-    "repo_path": "am-landing-page-builder",
-    "version": "1.0.0"
   }
 ]
