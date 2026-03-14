@@ -1,49 +1,56 @@
 [
   {
-    "name": "am-greeting",
-    "description": "Chào hỏi thông minh theo ngữ cảnh: thời gian, ngày lễ, mood của user. Tạo first impression tốt.",
-    "version": "1.0.0",
-    "author": "admin",
-    "tags": ["social", "personality"],
-    "updatedAt": "2026-03-07"
+    "slug": "am-weather",
+    "name": "Weather",
+    "description": "Tra cứu thời tiết hiện tại và dự báo cho bất kỳ địa điểm nào",
+    "category": "utility",
+    "tags": ["weather", "forecast"],
+    "repo_path": "am-weather",
+    "version": "1.0.0"
   },
   {
-    "name": "am-landing-page-builder",
-    "version": "1.0.0",
-    "description": "Build stunning landing pages with Next.js 15, Framer Motion, and Tailwind CSS. Includes modern design patterns, scroll animations, and responsive layouts.",
-    "author": "hubcom",
-    "tags": ["frontend", "landing-page", "framer-motion", "nextjs", "design"]
+    "slug": "am-greeting",
+    "name": "Greeting",
+    "description": "Chào hỏi thông minh, tạo ấn tượng đầu tiên tốt với user",
+    "category": "built-in",
+    "tags": ["greeting", "onboarding"],
+    "repo_path": "am-greeting",
+    "version": "1.0.0"
   },
   {
-    "name": "am-devices",
-    "description": "Điều khiển thiết bị (PC, laptop, Mac) của user qua SSH. Đọc devices.json để biết thiết bị online, dùng SSH để chạy lệnh, transfer file.",
-    "version": "1.0.0",
-    "author": "hubcom",
-    "tags": ["device", "ssh", "remote-control"],
-    "updatedAt": "2026-03-11"
+    "slug": "am-claude-code",
+    "name": "Claude Code CLI",
+    "description": "Spawn Claude Code CLI cho task nhỏ, nhanh — review, test, quick edit",
+    "category": "developer",
+    "tags": ["coding", "claude", "cli"],
+    "repo_path": "am-claude-code",
+    "version": "1.0.0"
   },
   {
-    "name": "am-claude-code",
-    "description": "Claude Code CLI wrapper cho quick tasks — review, explain, generate, quick edit 1-3 files. Effort thấp + consequence thấp.",
-    "version": "1.0.0",
-    "author": "hubcom",
-    "tags": ["coding", "claude-cli", "quick"],
-    "updatedAt": "2026-03-12"
+    "slug": "am-coding",
+    "name": "Coding",
+    "description": "Development skill — code, review, fix bugs trên repo local hoặc device qua SSH",
+    "category": "developer",
+    "tags": ["coding", "development", "git"],
+    "repo_path": "am-coding",
+    "version": "1.0.0"
   },
   {
-    "name": "am-coding",
-    "description": "Full development workflow — code, review, fix bugs. Effort cao hoặc consequence cao. Gọi am-claude-code cho CLI. Container hoặc device SSH.",
-    "version": "1.0.0",
-    "author": "hubcom",
-    "tags": ["coding", "development", "git", "claude-cli"],
-    "updatedAt": "2026-03-12"
+    "slug": "am-devices",
+    "name": "My Devices",
+    "description": "Điều khiển thiết bị của user qua SSH — chạy lệnh, check thông tin, mở app",
+    "category": "utility",
+    "tags": ["devices", "ssh", "remote"],
+    "repo_path": "am-devices",
+    "version": "1.0.0"
   },
   {
-    "name": "am-weather",
-    "description": "Tra cứu thời tiết và dự báo qua wttr.in hoặc Open-Meteo. Hỗ trợ mọi địa điểm, không cần API key.",
-    "version": "1.0.0",
-    "author": "admin",
-    "tags": ["utility", "weather"],
-    "updatedAt": "2026-03-07"
+    "slug": "am-landing-page-builder",
+    "name": "Landing Page Builder",
+    "description": "Build landing pages với Next.js, Framer Motion, Tailwind — modern design, smooth animations",
+    "category": "developer",
+    "tags": ["nextjs", "landing-page", "design"],
+    "repo_path": "am-landing-page-builder",
+    "version": "1.0.0"
   }
 ]
