@@ -49,9 +49,11 @@ Tạo skill mới từ đầu.
 
 ### Step 2: Create Structure
 
+Skills tạo tại `~/.openclaw/workspace/skills/` — agent tự load từ đây.
+
 **L1-L2 (Simple/Moderate):**
 ```bash
-mkdir -p skills/{name}/{scripts,references}
+mkdir -p ~/.openclaw/workspace/skills/{name}/{scripts,references}
 ```
 
 **L3-L4 (Complex/Critical):** Orchestrator pattern — xem templates trong `references/architecture-patterns.md`.
@@ -64,8 +66,34 @@ mkdir -p skills/{name}/{scripts,references}
 4. **Scripts** — validation scripts nếu cần
 
 Naming convention:
-- Skill name: `am-{domain}` hoặc `am-{domain}-{phase}` (cho sub-skills)
 - kebab-case, không chứa "claude"/"anthropic"
+- Ví dụ: `my-deploy-skill`, `web-scraper`, `image-gen`
+
+**Minimal SKILL.md template:**
+```markdown
+---
+name: {skill-name}
+description: >
+  {What it does}. Use when: {conditions/triggers}.
+  NOT for: {exclusions}.
+---
+
+# {Skill Name}
+
+## When to Use
+- ✅ ...
+- ❌ ...
+
+## Workflow
+
+### Step 1: ...
+### Step 2: ...
+
+## References
+| File | Nội dung |
+|---|---|
+| `references/...` | ... |
+```
 
 5. **Permissions Declaration** (bắt buộc nếu D7≥3 hoặc D9≥2)
 ```markdown
