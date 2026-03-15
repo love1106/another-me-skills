@@ -1,6 +1,6 @@
 ---
 name: am-developer-skill
-description: "Developer workflow cho mọi coding tasks — spawn Claude Code CLI, planning, branching, verification, dev preview, PR. Code trên container hoặc user's device qua SSH."
+description: "Developer workflow cho mọi coding tasks — spawn Claude Code CLI, planning, branching, verification, dev preview, PR. Code trên container hoặc user's device qua SSH. Use when: build feature, fix bug, refactor code, create PR, code review, generate tests, add API endpoint, update component, database migration, deploy config. NOT for: reading code (use read tool), simple edits under 3 lines (use edit tool directly), or thread-bound ACP harness requests (use sessions_spawn)."
 ---
 
 # Another Me Developer Skill
@@ -30,6 +30,12 @@ Workspace mặc định: `~/.openclaw/projects/<repo>`
    - Error/stderr: báo ngay, kèm log snippet
    - Done: báo kết quả + files changed
    - **Im lặng > 3 phút sau spawn = BUG** — phải fix ngay
+
+5. **MUST challenge ambiguous or high-risk tasks.**
+   Nếu task mơ hồ, thiếu context, hoặc có risk cao mà user chưa acknowledge → HỎI TRƯỚC.
+   KHÔNG tự suy đoán scope/approach rồi chạy.
+   Ví dụ: "Refactor auth module" mà không nói rõ scope → hỏi scope.
+   Ví dụ: Task đụng DB prod mà user chưa mention backup → flag risk.
 
 ## Prerequisites
 
@@ -61,7 +67,7 @@ which cloudflared && echo "✅ cloudflared installed" || echo "⚠️ cloudflare
 
 | Task size | Ví dụ | Workflow |
 |-----------|-------|----------|
-| **Quick** (1-3 files) | Fix CSS, update text | Bước 1 gọn → Skip 2-3 → Bước 4 → Bước 5 nhẹ (5.1 Build + 5.6 Diff). PR optional |
+| **Quick** (1-3 files) | Fix CSS, update text | Bước 1 gọn → Skip 2-3 → Bước 4 → Bước 5 nhẹ (5.1 Build + 5.6 Diff + 5.7 Criteria). PR optional |
 | **Medium** (3-10 files) | New component, refactor | Full workflow |
 | **Large** (>10 files) | New feature, migration | Full workflow bắt buộc |
 
@@ -71,8 +77,17 @@ which cloudflared && echo "✅ cloudflared installed" || echo "⚠️ cloudflare
 
 1. **Input** — Dữ liệu/điều kiện đầu vào
 2. **Output mong đợi** — Kết quả cuối cùng
-3. **Acceptance Criteria** — Tiêu chí "done" cụ thể
-4. **Ambiguous → hỏi.** Suy luận được → ghi assumption, tiến hành.
+3. **Acceptance Criteria** — Tiêu chí "done" cụ thể:
+   - [ ] Tiêu chí 1
+   - [ ] Tiêu chí 2
+   - [ ] Edge cases cần xử lý
+4. **Reversibility** — Task có thể revert không?
+   - 🟢 Reversible (UI, refactor, test) → proceed bình thường
+   - 🟡 Partial (DB migration, API contract) → ghi backup plan
+   - 🔴 Irreversible (delete data, deploy prod) → BẮT BUỘC confirm user
+5. **Verification method** cho mỗi criterion (build, test, curl, browser...)
+   - Criterion mà chỉ "looks good" → KHÔNG hợp lệ, phải cụ thể
+6. **Ambiguous → hỏi** (Hard Rule #5). Suy luận được → ghi assumption, tiến hành.
 
 > ⏩ Trình bày cùng plan ở Bước 2 → user confirm 1 lần duy nhất.
 
@@ -111,7 +126,7 @@ cat ~/.openclaw/projects/<repo>/.claude/instructions.md 2>/dev/null
 cat ~/.openclaw/projects/<repo>/CLAUDE.md 2>/dev/null
 ```
 
-Trình bày: **acceptance criteria + plan** → chờ approval 1 lần.
+Trình bày: **acceptance criteria (Bước 1) + plan (Bước 2)** → chờ approval 1 lần.
 💡 Task nhỏ: gộp Bước 1-2 thành 1 message.
 
 ## Bước 3: Create Feature Branch
@@ -180,50 +195,112 @@ exec(background:true, command:"claude --dangerously-skip-permissions --output-fo
 process(action:poll, sessionId:xxx, timeout:60000)
 ```
 
-**Long prompts → write to file:**
+**Long prompts hoặc prompts có special chars ($, backticks, quotes) → write to file:**
 ```bash
 cat > /tmp/prompt.md << 'PROMPT'
 Your long prompt here...
 PROMPT
 cat /tmp/prompt.md | claude --dangerously-skip-permissions --output-format json -p -
 ```
+⚠️ Inline prompts chỉ escape single quotes. Nếu prompt chứa `$`, `` ` ``, `"` → **luôn dùng file**.
 
 ### 4.2 Prompt Strategy
 
-**High-level prompts, KHÔNG micromanage.** Cung cấp: Goal, Constraints, Edge cases, Safety.
+**High-level prompts, KHÔNG micromanage.** Claude Code tự explore codebase.
 
-**Coding rules (luôn inject):** Đọc section "Tóm tắt" cuối [references/coding-rules.md](references/coding-rules.md), append vào cuối prompt. 9 defensive programming rules bắt buộc.
+Chỉ cung cấp:
+- **Goal**: cần làm gì
+- **Constraints**: giữ gì, không đụng gì, pattern nào follow
+- **Edge cases**: nếu X → làm Y
+- **Safety**: "If unsure → choose the safer option"
+- **Cuối prompt luôn thêm:** `"DO NOT git commit or push."`
+- **Coding rules (luôn inject):** Đọc section "Tóm tắt" cuối [references/coding-rules.md](references/coding-rules.md), append vào cuối prompt. 9 defensive programming rules bắt buộc.
+
+❌ Wrong: list mọi file, mọi dòng cần sửa, copy-paste code context
+✅ Right: mô tả goal + constraints, để Claude Code tự đọc code và implement
+
+💡 **Project conventions:** Claude Code tự đọc `.claude/instructions.md` nếu có. Không cần copy vào prompt — chỉ nhắc: `"Follow project conventions in .claude/instructions.md if it exists."`
 
 **2-Phase cho complex tasks:**
 ```
-Phase 1 (Plan): "Analyze + plan. Output: {steps, questions}"
-Phase 2 (Implement): "Implement. [answers]" → resume via session_id
+Phase 1 (Plan): "Analyze + plan this task. Output JSON: {steps, questions, assumptions}"
+  → parse result → có questions? → trả lời → Phase 2
+Phase 2 (Implement): "Implement the plan. [answers if any]"
+  → Resume session via session_id from Phase 1
 ```
 
 ### 4.3 Timeout & Retry (BẮT BUỘC)
 
-| Task type | Timeout |
-|-----------|---------|
-| Quick | 120s |
-| Medium | 300s |
-| Large | 600s |
+| Task type | Timeout | Ví dụ |
+|-----------|---------|-------|
+| Quick | 120s | review, explain, 1-2 files |
+| Medium | 300s | 3-5 files, refactor |
+| Large | 600s | >5 files, multi-module |
 
-**Max 3 attempts.** Fail → BÁO USER (Hard Rule #2). Task > 10 files → LUÔN split.
+**Retry flow (max 3 attempts) — Adaptive:**
+```
+Attempt 1: full prompt, standard timeout
+  ↓ fail → DIAGNOSE root cause:
+
+  ┌─ Token/context limit?  → Split task nhỏ hơn
+  ├─ Wrong approach?       → Thay đổi prompt strategy (chuyển sang 2-phase)
+  ├─ Environment issue?    → Fix env trước, retry cùng prompt
+  ├─ Model limitation?     → Escalate model (sonnet → opus)
+  └─ Timeout?              → Tăng timeout + simplify prompt
+
+Attempt 2: strategy KHÁC so với attempt 1 (dựa trên diagnosis)
+  ↓ fail → diagnose lại, chọn strategy chưa thử
+
+Attempt 3: last resort — minimal prompt, max timeout, hoặc split nhỏ nhất
+  ↓ fail
+→ BÁO USER NGAY (Hard Rule #2). Kèm: lỗi gì, đã thử gì, đề xuất hướng.
+```
+
+⚠️ **Mỗi attempt PHẢI khác strategy** — retry cùng cách = lãng phí. Ghi lại diagnosis mỗi attempt.
+
+**Task > 10 files → LUÔN split:**
+- Call 1: Tạo files mới (lib, utils, hooks)
+- Call 2: Update files hiện có (pages, components)
+- Call 3: Cleanup (xóa file cũ, verify build)
 
 ### 4.4 Parse Result
 
 ```json
-{ "type": "result", "result": "...", "session_id": "uuid", "is_error": false, "total_cost_usd": 0.05 }
+{
+  "type": "result",
+  "subtype": "success",
+  "result": "The response text",
+  "session_id": "uuid-to-resume",
+  "is_error": false,
+  "total_cost_usd": 0.05,
+  "usage": { "input_tokens": 1000, "output_tokens": 500 }
+}
 ```
 
-### 4.5 Monitoring (BẮT BUỘC cho background spawns)
+- `is_error: true` → retry (xem 4.3)
+- `session_id` → lưu để resume multi-turn
+- CLI crash / non-JSON → retry once, vẫn fail → báo user
 
-1. Spawn → báo user ETA
-2. Poll mỗi 30-60s → report progress
-3. > 5 phút → update user. > 10 phút → kill, báo user, đề xuất split
-4. Done → báo kết quả + files changed
+### 4.5 Available Models
+- `sonnet` — default cho hầu hết tasks
+- `opus` — chỉ cho deep reasoning (complex review, architecture)
 
-### 4.6 Code trên Device (SSH)
+### 4.6 Monitoring (BẮT BUỘC cho background spawns)
+
+1. **Spawn xong → báo user:** "Đang chạy Claude Code cho [task], ETA ~X phút"
+2. **Poll loop:**
+   ```
+   process action:poll sessionId:xxx timeout:60000
+   ```
+   - Running + > 5 phút → báo user "Vẫn đang chạy, đã X phút"
+   - Done → parse result → báo user kết quả + files changed
+   - Fail → retry (xem 4.3) hoặc báo user nếu đã hết retry
+3. **Partial success:**
+   - Parse result → xác định files đã sửa vs chưa
+   - Resume session (`session_id`) với prompt focus files còn lại
+4. **> 10 phút → kill, báo user, đề xuất split**
+
+### 4.7 Code trên Device (SSH)
 
 ```bash
 # Recommended: clone container → code → push → device pull
@@ -234,6 +311,8 @@ ssh $SSH_OPTS {user}@{ip} "cd ~/projects/{project} && claude --dangerously-skip-
 ## Bước 5: Verification Pipeline
 
 **BẮT BUỘC trước khi tạo PR.**
+
+Agent chạy verification trực tiếp qua exec sau khi Claude CLI hoàn thành. Nếu có FAIL → gọi lại Claude CLI để fix → chạy lại pipeline từ đầu.
 
 ```bash
 cd ~/.openclaw/projects/<repo>
@@ -246,44 +325,79 @@ cd ~/.openclaw/projects/<repo>
   && $PM run build 2>&1 | tail -20
 # Python: python -m py_compile src/*.py | Go: go build ./... | Rust: cargo build
 ```
+→ PHẢI pass. Fail → fix trước. Không có build script → SKIP.
 
-### 5.2 Type Check
+### 5.2 Type Check (SKIP nếu không có TypeScript)
 ```bash
 [ -f tsconfig.json ] && npx tsc --noEmit 2>&1 | head -30
 ```
 
-### 5.3 Lint + 5.4 Test
+### 5.3 Lint Check
 ```bash
-[ -n "$PM" ] && $PM run lint 2>&1 | head -30
-[ -n "$PM" ] && $PM run test 2>&1 | tail -30
+[ -n "$PM" ] && node -e "process.exit(require('./package.json').scripts?.lint ? 0 : 1)" 2>/dev/null \
+  && $PM run lint 2>&1 | head -30
 ```
 
-### 5.5 Security Scan (changed files only)
+### 5.4 Test Suite (SKIP nếu chưa có tests)
+```bash
+[ -n "$PM" ] && node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)" 2>/dev/null \
+  && $PM run test 2>&1 | tail -30
+```
+
+### 5.5 Security Quick Scan (changed files only)
 ```bash
 CHANGED=$(git diff $DEFAULT_BRANCH --name-only -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.py' '*.go' '*.rs')
-[ -n "$CHANGED" ] && echo "$CHANGED" | xargs -I{} grep -n "sk-\|api_key\|password\s*=\|secret\s*=" {} 2>/dev/null | head -10
+UNTRACKED=$(git ls-files --others --exclude-standard -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.py' '*.go' '*.rs')
+ALL_CHANGED=$(printf "%s\n%s" "$CHANGED" "$UNTRACKED" | sort -u | grep -v '^$')
+
+if [ -n "$ALL_CHANGED" ]; then
+  # Secrets check
+  echo "$ALL_CHANGED" | xargs -I{} grep -n "sk-\|api_key\|password\s*=\|secret\s*=" {} 2>/dev/null | head -10
+  # Console.log check
+  echo "$ALL_CHANGED" | xargs -I{} grep -n "console\.log" {} 2>/dev/null | head -10
+fi
 ```
 
-### 5.6 Diff Review + 5.7 Acceptance Criteria
+Security checklist (review thủ công trên changed files):
+- [ ] Không hardcode API keys, tokens, passwords
+- [ ] Không còn debug logs thừa
+- [ ] Error messages không leak stack trace ra client
+- [ ] User input được validate
+- [ ] Dùng parameterized queries hoặc ORM
+- [ ] Endpoint sensitive có kiểm tra auth
+
+### 5.6 Diff Review
 ```bash
-git diff $DEFAULT_BRANCH --stat && git status --short
+git diff $DEFAULT_BRANCH --stat
+git status --short
 ```
-Đối chiếu từng tiêu chí Bước 1 → PASS/FAIL.
+
+### 5.7 Acceptance Criteria Check
+Đối chiếu từng tiêu chí ở Bước 1. Mỗi tiêu chí ghi rõ PASS/FAIL + verification method đã dùng.
 
 ### 5.8 Verification Report
+
 ```
 VERIFICATION REPORT
 ====================
-Build/Types/Lint/Tests/Security: [PASS/FAIL/SKIP]
-Diff: [X files changed]
-Criteria: [X/Y passed]
-Overall: [READY / NOT READY] for PR
+Build:      [PASS/FAIL]
+Types:      [PASS/FAIL/SKIP]
+Lint:       [PASS/FAIL]
+Tests:      [PASS/FAIL/SKIP]
+Security:   [PASS/FAIL]
+Diff:       [X files changed]
+Criteria:   [X/Y passed]
+
+Overall:    [READY / NOT READY] for PR
 ```
-⚠️ NOT READY → FIX trước, chạy lại pipeline.
+
+⚠️ **NOT READY → FIX hết rồi chạy lại pipeline. KHÔNG tạo PR khi còn FAIL.**
+💡 **Gửi report cho user confirm trước khi tạo PR.**
 
 ## Bước 6: Dev Preview (khi user cần manual test)
 
 **Trigger:** User nói "test thử", "cho anh xem", "manual test", "review UI".
+**Bỏ qua** nếu task nhỏ, backend-only, hoặc user mở localhost trực tiếp được.
 
 **Flow tự động — agent chạy hết, chỉ gửi link khi ready:**
 
@@ -292,7 +406,6 @@ Overall: [READY / NOT READY] for PR
 cd ~/.openclaw/projects/<repo>
 # Re-detect PM (xem Bước 3)
 
-# Auto-detect port
 PORT=$(node -e "
   try {
     const pkg = require('./package.json');
@@ -328,7 +441,6 @@ for i in $(seq 1 15); do
   sleep 1
 done
 
-# Verify
 curl -s -o /dev/null -w "%{http_code}" "$TUNNEL_URL" | grep -qE "^(200|301|302|304)" && echo "✅ Ready"
 ```
 
@@ -355,23 +467,65 @@ cd ~/.openclaw/projects/<repo>
 # Re-detect (xem Bước 3)
 
 [ -n "$PM" ] && git diff $DEFAULT_BRANCH --name-only | grep -q "package.json" && $PM install
+
+git status && git diff --stat
+
 git add -A
 git diff --cached --quiet || git commit -m "<type>(<scope>): <description>"
 git push origin <branch-name>
 ```
 
-Conventional Commits: `feat/fix/refactor/docs/chore/test/perf` — lowercase, imperative, ≤ 72 chars.
+### Conventional Commits (BẮT BUỘC)
+
+Format: `<type>[optional scope]: <description>`
+
+| Type | Khi nào dùng |
+|------|-------------|
+| `feat` | Feature mới |
+| `fix` | Sửa bug |
+| `docs` | Chỉ docs |
+| `style` | Format (không đổi logic) |
+| `refactor` | Refactor |
+| `perf` | Performance |
+| `test` | Thêm/sửa test |
+| `chore` | Build, CI, deps |
+
+Quy tắc: lowercase, imperative mood, ≤ 72 chars, không chấm cuối.
 
 ## Bước 8: Pull Request (nếu có `gh` CLI)
 
 ```bash
 REPO=$(git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
-gh pr create --repo "$REPO" --title "<type>(<scope>): <description>" --assignee @me \
+
+gh pr create --repo "$REPO" \
+  --title "<type>(<scope>): <description>" \
+  --assignee @me \
   --body "## Changes
-- ...
+- <change 1>
+- <change 2>
+
 ## Verification Report
-<từ Bước 5.8>" --base $DEFAULT_BRANCH
+<nhúng report từ Bước 5.8>
+
+## Testing
+- <how to test>" \
+  --base $DEFAULT_BRANCH
 ```
+
+### Handling PR Review Feedback
+
+```bash
+cd ~/.openclaw/projects/<repo>
+git checkout <feature-branch>
+
+# Fix theo feedback — spawn Claude CLI (Bước 4)
+# Chạy lại verification pipeline (Bước 5)
+# Sau khi PASS:
+git add -A
+git diff --cached --quiet || git commit -m "fix: address PR review feedback"
+git push origin <feature-branch>
+```
+→ PR tự update. Reply vào review comments giải thích đã fix gì.
 
 ## Domain References (đọc khi cần, KHÔNG load mặc định)
 
@@ -386,7 +540,7 @@ gh pr create --repo "$REPO" --title "<type>(<scope>): <description>" --assignee 
 - **KHÔNG** hardcode secrets, API keys, passwords
 - **KHÔNG** commit `.env` files
 - **KHÔNG** push to main trực tiếp (branch + PR)
-- **Next.js: KHÔNG** dùng `NEXT_PUBLIC_` cho secrets (DB, tokens) — chỉ cho public config
+- **Next.js: KHÔNG** dùng `NEXT_PUBLIC_` cho secrets — chỉ cho public config
 - **HỎI user** trước khi deploy
 
 ## Platform-specific (SSH)
@@ -396,6 +550,18 @@ gh pr create --repo "$REPO" --title "<type>(<scope>): <description>" --assignee 
 | macOS | `zsh` | `/Users/{user}/projects/` |
 | Windows | `powershell` | `C:\Users\{user}\projects\` |
 | Linux | `bash` | `/home/{user}/projects/` |
+
+## Quick Reference
+
+### Conflict Resolution
+1. Read — understand both sides
+2. Prioritize default branch — code đã reviewed, adapt your code
+3. Ask if unsure — never silently delete someone else's code
+4. Use Claude CLI for complex conflicts
+5. Never force push to default branch
+
+### Module System
+Follow project's existing module system. Prefer ESM cho new projects.
 
 ## Troubleshooting
 
@@ -416,3 +582,12 @@ gh pr create --repo "$REPO" --title "<type>(<scope>): <description>" --assignee 
 | 2 | `--permission-mode bypassPermissions` blocked for root | Fallback: tạo user `coder` |
 | 3 | Poll mỗi 30-60s — spawn rồi quên = bug | Hard Rule #3 |
 | 4 | Quick tunnel URL random mỗi lần — OK cho single app | Multi-service cần inject URL |
+| 5 | Mỗi retry PHẢI khác strategy — retry cùng cách = lãng phí | Adaptive retry |
+| 6 | Task > 10 files → LUÔN split thành multiple calls | Tránh timeout + token limit |
+
+## Tools Required
+
+- `claude` CLI — coding agent
+- `gh` CLI — GitHub operations (optional, cho PR)
+- `cloudflared` — dev preview tunnels (optional)
+- `git` — version control

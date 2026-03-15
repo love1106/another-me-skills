@@ -79,157 +79,13 @@ Opinionated recommendations. Chọn dựa trên: ecosystem maturity, DX, perform
 
 | Nhu cầu | Recommend | Alternatives |
 |---------|-----------|-------------|
-| Auth (Hubcom stack) | **auth-cloud-flare-workspace** — multi-tenant OAuth 2.0 + OIDC, Cloudflare Workers + D1 + KV | — |
 | Auth (managed) | **Clerk** | Auth0, Supabase Auth |
-| Auth (self-hosted, other) | **Auth.js v5** / **Better Auth** | Passport.js (legacy) |
+| Auth (self-hosted) | **Auth.js v5** / **Better Auth** | Passport.js (legacy) |
 | JWT | **jose** (Edge-compatible) | jsonwebtoken |
 | Password hashing | **bcrypt** / **argon2** | — |
 | Rate limiting | **rate-limiter-flexible** | express-rate-limit |
 | Input validation | **Zod** | Joi, Yup |
 | CORS | Built-in framework support | cors package |
-
-### Auth Integration — Hubcom Identity Server
-
-Reference repo: [hubcom-tech/auth-cloud-flare-workspace](https://github.com/hubcom-tech/auth-cloud-flare-workspace)
-
-**Stack:** Hono + jose + Zod + Cloudflare D1 + KV
-
-**Khi nào dùng:** Project cần auth cho web + mobile, self-hosted trên Cloudflare, multi-tenant SaaS.
-**Khi nào KHÔNG dùng:** Prototype nhanh → Clerk/Supabase Auth. Single app đơn giản → Auth.js v5.
-
-**Mỗi user/team tạo tenant riêng và tự quản lý** — không cần admin access. Tenant có: credentials, redirect URIs, allowed apps.
-
-#### Tích hợp Web App (Hono / Next.js)
-
-**1. Env vars cần thiết:**
-```env
-IDENTITY_SERVER_URL=https://auth.example.com
-CLIENT_ID=your_client_id
-CLIENT_SECRET=your_client_secret
-WEB_CLIENT_URL=https://yourapp.com
-```
-
-**2. OAuth flow (Authorization Code + PKCE):**
-```
-User click Login → POST /login (generate PKCE, store verifier in httpOnly cookie)
-  → Redirect to identity-server /oauth/authorize
-  → User authenticates (Google/Apple/Facebook)
-  → Redirect back to /callback with code
-  → Exchange code + PKCE verifier for tokens
-  → Store access_token + refresh_token in httpOnly cookies
-  → Redirect to dashboard
-```
-
-**3. Identity Client (core service):**
-```typescript
-class IdentityClient {
-  constructor(env: { IDENTITY_SERVER_URL, CLIENT_ID, CLIENT_SECRET }) { ... }
-
-  // Build OAuth authorize URL (với PKCE + state)
-  buildAuthorizeUrl(params: { provider, codeChallenge, state, scope? }): string
-
-  // Exchange authorization code for tokens
-  exchangeCode(params: { code, codeVerifier }): Promise<TokenResponse>
-
-  // Refresh access token
-  refreshToken(refreshToken: string): Promise<TokenResponse>
-
-  // Revoke token on logout
-  revokeToken(token: string): Promise<void>
-
-  // Get user info
-  getUserInfo(accessToken: string): Promise<UserInfo>
-}
-```
-
-**4. Auth middleware (protect routes):**
-```typescript
-// Validate JWT locally using JWKS (RS256) — no introspection needed (<5ms)
-// Proactive refresh: nếu token < 5 phút trước khi hết hạn → auto refresh
-// Invalid/expired → redirect /login
-
-authMiddleware() → validates access_token cookie → sets c.user → next()
-```
-
-**5. Token storage (httpOnly cookies):**
-```
-access_token:  httpOnly, Secure, SameSite=Lax,    maxAge=1h
-refresh_token: httpOnly, Secure, SameSite=Strict,  maxAge=7d
-pkce_verifier: httpOnly, Secure, SameSite=Lax,    maxAge=10min (temp)
-```
-
-**6. Routes cần implement:**
-```
-POST /login     → initiate OAuth (generate PKCE, redirect to identity-server)
-GET  /callback  → handle callback (exchange code, set cookies)
-POST /logout    → revoke token, clear cookies
-```
-
-#### Tích hợp Mobile App (React Native + Expo)
-
-**1. Dependencies:**
-```bash
-npx expo install expo-web-browser expo-secure-store expo-apple-authentication
-npm install @react-native-google-signin/google-signin
-```
-
-**2. Env vars:**
-```env
-EXPO_PUBLIC_CLIENT_ID=mobile-client
-EXPO_PUBLIC_IDENTITY_SERVER_URL=https://auth.example.com
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=xxx.apps.googleusercontent.com
-```
-
-**3. OAuth flow (platform-specific best UX):**
-```
-iOS:
-  - Apple → Native Apple Sign-In (Face ID/Touch ID) → exchange identity token
-  - Google → Web-based OAuth (expo-web-browser) → PKCE flow
-
-Android:
-  - Google → Native Google Sign-In (one-tap) → exchange ID token
-  - Apple → Web-based OAuth (expo-web-browser) → PKCE flow
-```
-
-**4. Token storage:** `expo-secure-store` (Keychain on iOS, EncryptedSharedPreferences on Android)
-
-**5. Auth hook (wrap entire app):**
-```tsx
-// AuthProvider wraps app, provides:
-const { isAuthenticated, isLoading, user, login, logout, getAccessToken } = useAuth();
-
-// Login
-await login('google');  // or 'apple'
-
-// Get valid token (auto-refresh if near expiry)
-const token = await getAccessToken();
-
-// Logout
-await logout();
-```
-
-**6. Auto refresh:** Token tự refresh khi < 5 phút trước expiry via `getValidAccessToken()`.
-
-#### API Endpoints (Identity Server)
-
-```
-OAuth:
-  GET  /oauth/authorize          → Initiate auth flow
-  POST /oauth/token              → Exchange code/refresh for tokens
-  POST /oauth/revoke             → Revoke token
-  GET  /oauth/userinfo           → Get user claims
-  GET  /.well-known/openid-configuration
-  GET  /.well-known/jwks.json
-
-Tenant self-service (Basic Auth với client_id:client_secret):
-  GET/PATCH /api/v1/tenant                    → Tenant info
-  GET/POST  /api/v1/tenant/credentials        → Manage credentials
-  POST      /api/v1/tenant/credentials/:id/rotate
-  GET/POST  /api/v1/tenant/redirect-uris      → Manage redirect URIs
-  GET/POST  /api/v1/tenant/allowed-apps       → Manage allowed apps
-
-Swagger UI: /docs
-```
 
 ## Hosting & Deploy
 
@@ -269,7 +125,7 @@ Swagger UI: /docs
 
 | Use case | Stack |
 |----------|-------|
-| **SaaS MVP** | Next.js (full-stack: SSR + API Routes) + Drizzle + PostgreSQL + Vercel. Auth: Clerk (nhanh) hoặc Hubcom auth (self-hosted). Tách NestJS chỉ khi cần |
+| **SaaS MVP** | Next.js (full-stack: SSR + API Routes) + Drizzle + PostgreSQL + Vercel. Auth: Clerk (nhanh) hoặc Auth.js v5 (self-hosted). Tách NestJS chỉ khi cần |
 | **E-commerce** | Next.js + Medusa.js (headless) hoặc Shopify Storefront API + NestJS |
 | **Brochure/Giới thiệu** (nhà hàng, salon, portfolio...) | Astro + Tailwind + Cloudflare Pages — static, fast, free hosting |
 | **Blog/Content** | Astro + MDX + Cloudflare Pages |
