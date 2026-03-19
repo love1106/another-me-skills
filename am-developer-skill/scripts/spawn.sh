@@ -13,7 +13,18 @@ WORKDIR="${1:-.}"
 MODEL="${2:-sonnet}"
 PROMPT="$3"
 SESSION_ID="${4:-}"  # optional: resume session
-CLAUDE_USER="${CLAUDE_USER:-coder}"
+# Auto-detect non-root user: $CLAUDE_USER → coder → first non-system user → current user
+if [ -n "$CLAUDE_USER" ]; then
+  : # use env var
+elif id "coder" &>/dev/null; then
+  CLAUDE_USER="coder"
+else
+  # Find first non-system user (UID >= 1000)
+  CLAUDE_USER=$(awk -F: '$3 >= 1000 && $3 < 65534 { print $1; exit }' /etc/passwd 2>/dev/null || echo "")
+  if [ -z "$CLAUDE_USER" ]; then
+    CLAUDE_USER=$(whoami)
+  fi
+fi
 
 if [ -z "$PROMPT" ]; then
   echo '{"type":"error","is_error":true,"result":"Missing prompt argument"}'
@@ -50,8 +61,14 @@ fi
 
 # Verify user exists
 if ! id "$CLAUDE_USER" &>/dev/null; then
-  echo "{\"type\":\"error\",\"is_error\":true,\"result\":\"User ${CLAUDE_USER} does not exist. Set CLAUDE_USER env var.\"}"
+  echo "{\"type\":\"error\",\"is_error\":true,\"result\":\"User ${CLAUDE_USER} does not exist. Set CLAUDE_USER env var or create: useradd -m -s /bin/bash coder\"}"
   exit 1
+fi
+
+# If running as root and CLAUDE_USER is also root, warn and use acceptEdits
+RUN_AS_ROOT=false
+if [ "$CLAUDE_USER" = "root" ] || [ "$(id -u "$CLAUDE_USER")" = "0" ]; then
+  RUN_AS_ROOT=true
 fi
 
 # Find claude binary
@@ -77,34 +94,55 @@ ESC_WORKDIR=$(escape_sq "$WORKDIR")
 ESC_PROMPT=$(escape_sq "$PROMPT")
 ESC_MODEL=$(escape_sq "$MODEL")
 
-# Build CLI args
-if [ -n "$SESSION_ID" ]; then
-  ESC_SESSION=$(escape_sq "$SESSION_ID")
-  CLI_ARGS="--resume '${ESC_SESSION}' --permission-mode bypassPermissions --output-format json --model '${ESC_MODEL}' -p"
-else
-  CLI_ARGS="--permission-mode bypassPermissions --output-format json --model '${ESC_MODEL}' -p"
+# Build CLI args — use acceptEdits if running as root (bypassPermissions blocked for root)
+PERM_MODE="bypassPermissions"
+if [ "$RUN_AS_ROOT" = true ]; then
+  PERM_MODE="acceptEdits"
 fi
 
-# Run as non-root user (bypassPermissions blocked for root)
+if [ -n "$SESSION_ID" ]; then
+  ESC_SESSION=$(escape_sq "$SESSION_ID")
+  CLI_ARGS="--resume '${ESC_SESSION}' --permission-mode ${PERM_MODE} --output-format json --model '${ESC_MODEL}' -p"
+else
+  CLI_ARGS="--permission-mode ${PERM_MODE} --output-format json --model '${ESC_MODEL}' -p"
+fi
+
+# Determine if we need su (skip if CLAUDE_USER is current user)
+CURRENT_USER=$(whoami)
+USE_SU=true
+if [ "$CLAUDE_USER" = "$CURRENT_USER" ]; then
+  USE_SU=false
+fi
+
+# Helper: run command as CLAUDE_USER (or directly if same user)
+run_as_user() {
+  local CMD="$1"
+  if [ "$USE_SU" = true ]; then
+    su - "$CLAUDE_USER" -s /bin/bash -c "$CMD" 2>&1
+  else
+    bash -c "$CMD" 2>&1
+  fi
+}
+
+# Run Claude CLI
 if [ -n "$USE_FILE_INPUT" ]; then
   # Pipe from file — safe for prompts with special chars ($, backticks, quotes)
-  # Ensure coder can read the prompt file
   chmod o+r "$USE_FILE_INPUT" 2>/dev/null || true
-  OUTPUT=$(su - "$CLAUDE_USER" -s /bin/bash -c "
+  OUTPUT=$(run_as_user "
     export ANTHROPIC_API_KEY='${ESC_API_KEY}'
     export ANTHROPIC_BASE_URL='${ESC_BASE_URL}'
     cd '${ESC_WORKDIR}' || { echo '{\"type\":\"error\",\"is_error\":true,\"result\":\"Cannot cd to workdir: ${ESC_WORKDIR}\"}'; exit 1; }
     cat '$(escape_sq "$USE_FILE_INPUT")' | ${CLAUDE_BIN} ${CLI_ARGS} -
-  " 2>&1)
+  ")
   # Cleanup temp file if we created one
   [[ "$USE_FILE_INPUT" == /tmp/spawn-prompt-* ]] && rm -f "$USE_FILE_INPUT"
 else
-  OUTPUT=$(su - "$CLAUDE_USER" -s /bin/bash -c "
+  OUTPUT=$(run_as_user "
     export ANTHROPIC_API_KEY='${ESC_API_KEY}'
     export ANTHROPIC_BASE_URL='${ESC_BASE_URL}'
     cd '${ESC_WORKDIR}' || { echo '{\"type\":\"error\",\"is_error\":true,\"result\":\"Cannot cd to workdir: ${ESC_WORKDIR}\"}'; exit 1; }
     ${CLAUDE_BIN} ${CLI_ARGS} '${ESC_PROMPT}'
-  " 2>&1)
+  ")
 fi
 
 EXIT_CODE=$?

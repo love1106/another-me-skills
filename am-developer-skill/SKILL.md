@@ -1,6 +1,6 @@
 ---
 name: am-developer-skill
-version: 1.9.0
+version: 1.10.0
 author: khoidoan
 description: >
   Developer workflow for ALL coding tasks. Handles: init project, security review, self-improve,
@@ -17,13 +17,18 @@ description: >
 
 Developer workflow for ALL coding tasks — quick edits to complex multi-file features.
 
-**Projects path:** `~/projects/<repo>` (`~` = actual home dir, e.g. `/root` hoặc `/home/coder`)
+**Projects path:** Detect from environment. Common locations:
+- Container/OpenClaw: `~/.openclaw/projects/<repo>` or workspace-relative
+- Standard: `~/projects/<repo>`
+- SSH remote: user-specified path
+
+Agent MUST resolve `~` to actual home dir (e.g. `/root`, `/home/coder`) and verify path exists before proceeding.
 
 ## Permissions
 
 - **reads:** source code, git history, project config files, `.claude/instructions.md`
 - **writes:** source code files, git branches, lock files, CLI run logs (`memory/cli-runs.jsonl`), annotations (`memory/am-developer-skill-annotations/`)
-- **external:** GitHub API (issues, PRs, projects via `gh` CLI), Claude Code CLI (spawns sub-process), GitNexus MCP (local), Cloudflare tunnel (dev preview)
+- **external:** GitHub API (issues, PRs, projects via `gh` CLI, if available), Claude Code CLI (spawns sub-process), GitNexus MCP (local, if installed), Cloudflare tunnel (dev preview, if available)
 - **destructive:** `git reset --soft` (squash commits), `git stash` (stashes uncommitted changes), branch deletion after merge
 - **requires_confirmation:** irreversible actions (DB prod, delete data, deploy prod — flagged in Step 1 Reversibility check)
 
@@ -76,7 +81,7 @@ Developer workflow for ALL coding tasks — quick edits to complex multi-file fe
 |-----------|-------|---------------|----------|
 | **Quick** (1-3 files, isolated) | Fix CSS, update text, add test | Skip | Step 1 gọn → Skip Step 2-4 → Step 5 (annotations: `--limit 3` hoặc skip) → Step 6 lite (Build + Diff + Criteria only). Skip 5.10 nếu trivial visual change. PR optional — commit thẳng nếu user cho phép |
 | **Medium** (3-10 files) | New component, refactor module | Recommended | Full workflow, Step 2 optional |
-| **Large** (>10 files, cross-module) | New feature, migration | **Bắt buộc** | Full workflow bắt buộc |
+| **Large** (>10 files, cross-module) | New feature, migration | **Recommended** (bắt buộc nếu installed) | Full workflow bắt buộc |
 | **Hotfix** (production emergency) | Critical bug in prod | Optional (nếu cần blast radius) | Skip Step 2-3 → Branch from latest release/tag → Step 5 → Step 6 lite → commit + push trực tiếp (hoặc fast-track PR). Tạo issue **sau** khi fix |
 
 ## Workflow (follow strictly in order)
@@ -135,7 +140,10 @@ python3 <skill_dir>/scripts/retrospect.py --trim-only
 
 ```bash
 # 0. Check GitNexus có sẵn không — nếu chưa install → skip toàn bộ Step 0c
-command -v gitnexus >/dev/null 2>&1 || { echo "GitNexus not installed, skipping code intelligence. See references/gitnexus-setup.md"; exit 0; }
+# Check gitnexus — skip entire Step 0c if not installed
+command -v gitnexus >/dev/null 2>&1
+if [ $? -ne 0 ]; then echo "GitNexus not installed, skipping. See references/gitnexus-setup.md"; fi
+# (if not installed, skip all commands below in this step)
 
 BRIDGE="<skill_dir>/scripts/git-nexus-mcp-bridge.js"
 
@@ -193,11 +201,16 @@ Trước khi lên plan hay viết code, phải xác định rõ:
 
 ### Step 2: Create GitHub Project Task
 
+**Requires `gh` CLI.** Nếu `gh` không available → skip Step 2, track task manually (ghi vào commit messages).
+
 Sau khi đã hiểu rõ yêu cầu (Step 1), tạo GitHub Issue để tracking:
 
 ```bash
+# Check gh available
+command -v gh >/dev/null 2>&1 || { echo "⚠️ gh CLI not found, skipping GitHub issue creation"; ISSUE_NUM=""; }
+
 # Detect owner/repo from git remote
-REPO=$(git -C ~/projects/<repo> remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
+REPO=$(git -C <PROJECT_DIR> remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
 
 # Capture issue number for Step 8 PR body (Closes #N)
 ISSUE_URL=$(gh issue create --repo "$REPO" \
@@ -227,9 +240,9 @@ Before writing any code, create a plan. Analyze:
 
 Read project-specific conventions:
 ```bash
-cat ~/projects/<repo>/.claude/instructions.md 2>/dev/null
-cat ~/projects/<repo>/CLAUDE.md 2>/dev/null
-cat ~/projects/<repo>/CODING.md 2>/dev/null
+cat <PROJECT_DIR>/.claude/instructions.md 2>/dev/null
+cat <PROJECT_DIR>/CLAUDE.md 2>/dev/null
+cat <PROJECT_DIR>/CODING.md 2>/dev/null
 ```
 
 Trình bày cho user: **acceptance criteria (Step 1) + GitNexus context nếu có (Step 0c) + plan (Step 3)** cùng lúc → chờ approval 1 lần duy nhất.
@@ -239,7 +252,7 @@ Trình bày cho user: **acceptance criteria (Step 1) + GitNexus context nếu c�
 ### Step 4: Setup & Create Feature Branch
 
 ```bash
-cd ~/projects/<repo>   # resolve ~ = actual home dir (e.g. /root, /home/coder)
+cd <PROJECT_DIR>   # resolve from environment — see "Projects path" at top
 
 # Detect environment (re-run mỗi exec session vì không share state)
 source <skill_dir>/scripts/detect-env.sh
@@ -437,23 +450,23 @@ Attempt 3: last resort — minimal prompt, max timeout, hoặc split nhỏ nhấ
 |-----|----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | ✅ | — | API key |
 | `ANTHROPIC_BASE_URL` | ❌ | api.anthropic.com | Proxy URL |
-| `CLAUDE_USER` | ❌ | `coder` | Non-root user (xem bên dưới) |
+| `CLAUDE_USER` | ❌ | auto-detect | Non-root user for Claude CLI (xem bên dưới) |
 
-**Tại sao cần user `coder`?**
+**Tại sao cần non-root user?**
 Claude Code CLI block `--permission-mode bypassPermissions` khi chạy root.
-`spawn.sh` tự động `su - coder` và **tự chmod workdir** nếu thiếu permission.
-Agent không cần lo permission — `spawn.sh` handle hết.
+`spawn.sh` tự detect available non-root user (ưu tiên: `$CLAUDE_USER` → `coder` → first non-system user) và **tự chmod workdir** nếu thiếu permission.
+Nếu không tìm được non-root user → fallback chạy as current user (có thể cần `--permission-mode acceptEdits`).
 
 **First-time setup checklist (1 lần duy nhất):**
 1. `npm install -g @anthropic-ai/claude-code` + verify `claude --version`
-2. `useradd -m -s /bin/bash coder` (hoặc set `CLAUDE_USER` nếu dùng user khác)
+2. Tạo non-root user (recommended): `useradd -m -s /bin/bash coder` — hoặc set `CLAUDE_USER` env nếu dùng user khác. Skip nếu environment đã có non-root user.
 3. Set env vars: `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` (optional)
-4. Install LSP servers: `npm install -g typescript-language-server typescript pyright`
-5. Enable experimental features — tạo `/home/coder/.claude/settings.json`:
+4. Install LSP servers (recommended): `npm install -g typescript-language-server typescript pyright`
+5. Enable experimental features — tạo `$HOME/.claude/settings.json` (cho user chạy Claude):
    ```json
    { "env": { "ENABLE_LSP_TOOL": "1", "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
    ```
-6. Install `acl` package nếu chưa có: `apt install acl` (cho setfacl permission handling)
+6. Install `acl` package nếu chưa có: `apt install acl` (cho setfacl permission handling — optional, spawn.sh fallback to chmod)
 
 #### 5.7 Monitoring Checklist (BẮT BUỘC cho background spawns)
 
@@ -531,7 +544,10 @@ bash <skill_dir>/scripts/log-cli-run.sh \
 
 ### Step 5.10: Browser Verification (PinchTab)
 
-**BẮT BUỘC cho frontend/fullstack tasks.** Exceptions:
+**Requires `pinchtab`.** Nếu không available → skip, rely on build pass + manual user verify.
+
+**BẮT BUỘC cho frontend/fullstack tasks khi PinchTab available.** Exceptions:
+- PinchTab not installed → skip
 - Task chỉ backend/API → skip
 - Quick tasks (trivial CSS, text change, config) → skip nếu build pass
 - Hotfix → skip nếu build pass + user đã confirm behavior
@@ -578,15 +594,17 @@ Nếu có FAIL → gọi lại Claude CLI để fix → chạy lại pipeline t�
 
 ### Step 7: Dev Preview (Cloudflare Tunnel)
 
+**Requires `cloudflared`.** Nếu không available → skip, hướng dẫn user mở localhost trực tiếp.
+
 **Trigger:** User nói "test thử", "cho anh xem", "manual test", "review UI", hoặc yêu cầu link preview.
-**Bỏ qua** nếu task nhỏ, backend-only, hoặc user mở localhost trực tiếp được.
+**Bỏ qua** nếu: `cloudflared` not installed, task nhỏ, backend-only, hoặc user mở localhost trực tiếp được.
 
 Chi tiết tại `references/dev-preview.md`. Flow: start dev server → wait ready → start tunnel → gửi link → giữ alive → cleanup khi user xong.
 
 ### Step 8: Create Pull Request
 
 ```bash
-cd ~/projects/<repo>
+cd <PROJECT_DIR>
 source <skill_dir>/scripts/detect-env.sh
 
 # Nếu Claude CLI thêm package mới → đảm bảo lock file updated
@@ -624,9 +642,15 @@ git push origin <branch-name>
 # git branch -d <branch-name>
 # → Done, không cần PR. Chỉ dùng khi: Quick task + user explicitly OK.
 
-# === Standard path: tạo PR ===
+# === Standard path: tạo PR (requires gh CLI) ===
 # Detect repo from git remote
 REPO=$(git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
+
+# Nếu gh không available → push branch, hướng dẫn user tạo PR manually
+if ! command -v gh &>/dev/null; then
+  echo "⚠️ gh CLI not found. Branch pushed. Create PR manually at: https://github.com/$REPO/compare/<branch-name>"
+  exit 0
+fi
 
 # Tạo PR — nhúng verification report vào body, assign luôn
 gh pr create \
@@ -653,7 +677,7 @@ gh pr create \
 Khi reviewer request changes:
 
 ```bash
-cd ~/projects/<repo>
+cd <PROJECT_DIR>
 git checkout <feature-branch>
 
 # Fix theo feedback — spawn Claude CLI (xem Step 5, nhớ "DO NOT git commit" rule)
@@ -728,9 +752,13 @@ Conventions, conflict resolution, module system → [references/conventions.md](
 
 ## Tools Required
 
+**Required:**
 - `claude` CLI (v2.1.63+) — coding agent (xem setup tại Step 5.6)
-- `gh` CLI — GitHub operations
-- `cloudflared` — dev preview tunnels
 - `git` — version control
-- `typescript-language-server`, `pyright` — LSP servers cho code navigation (recommended)
-- `gitnexus` — code intelligence engine, MCP tools cho codebase awareness (recommended, xem `references/gitnexus-setup.md`)
+
+**Recommended (graceful skip nếu unavailable):**
+- `gh` CLI — GitHub operations (Step 2, 8 — fallback: manual issue/PR)
+- `cloudflared` — dev preview tunnels (Step 7 — fallback: localhost)
+- `pinchtab` — browser verification (Step 5.10 — fallback: manual verify)
+- `typescript-language-server`, `pyright` — LSP servers cho code navigation
+- `gitnexus` — code intelligence engine, MCP tools cho codebase awareness (xem `references/gitnexus-setup.md`)
