@@ -2,11 +2,11 @@
   {
     "slug": "am-developer-skill",
     "name": "Developer Skill",
-    "description": "Developer workflow cho mọi coding tasks — spawn Claude Code CLI, planning, branching, verification, dev preview, PR. Code trên container hoặc device qua SSH.",
+    "description": "Developer workflow for ALL coding tasks. Handles: init project, security review, Claude Code CLI with retry, planning, GitHub tracking, branching, verification, PR creation. CLI error tracking with auto-log and retrospect analysis.",
     "category": "developer",
-    "tags": ["coding", "development", "git", "claude", "cli", "tunnel", "preview"],
+    "tags": ["coding", "development", "git", "claude", "cli", "tunnel", "preview", "gitnexus", "testing"],
     "repo_path": "am-developer-skill",
-    "version": "3.0.0"
+    "version": "1.10.0"
   },
   {
     "slug": "am-devices",
