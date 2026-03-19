@@ -1,74 +1,93 @@
 ---
 name: am-devices
-description: "Điều khiển thiết bị của user qua SSH — chạy lệnh, check thông tin, mở app, chụp screenshot, transfer file. Kết nối qua Tailscale VPN."
+version: 2.0.0
+author: khoidoan
+description: >
+  Điều khiển thiết bị của user qua SSH và CUA (Computer-Use Agent).
+  Chạy lệnh, check thông tin, mở app, chụp screenshot, GUI control, transfer file.
+  Kết nối qua Tailscale VPN. SSH-first, CUA-fallback.
+  Use when: user hỏi về thiết bị, muốn chạy lệnh, check info, copy file, screenshot.
+  Triggers: "thiết bị", "device", "máy tính", "laptop", "PC", "chạy lệnh",
+  "mở app", "screenshot", "chụp màn hình", "copy file", "transfer".
+  NOT for: CUA GUI interaction (→ am-computer-use), device linking/pairing,
+  OpenClaw node pairing, network troubleshooting.
 ---
 
-# My Devices — Điều khiển thiết bị của user qua SSH
+# My Devices — Điều khiển thiết bị qua SSH + CUA
 
-Skill này cho phép bạn kết nối và điều khiển các thiết bị (PC, laptop, Mac) mà user đã liên kết. Đây KHÔNG phải OpenClaw pairing — đây là thiết bị thật của user được kết nối qua Tailscale VPN.
+Skill này cho phép kết nối và điều khiển thiết bị thật (PC, laptop, Mac) của user qua Tailscale VPN.
 
-## SSH Options (dùng xuyên suốt skill)
+**Nguyên tắc: SSH-first, CUA-fallback** — ưu tiên SSH (rẻ, nhanh, 0 vision tokens). Chỉ dùng CUA khi cần GUI.
 
-Define 1 lần, dùng lại ở mọi command:
+> 🔗 **Task cần GUI?** (click, type, đọc màn hình) → chuyển sang **am-computer-use**.
+
+## Permissions
+
+- reads: [devices.json, remote files via SSH/SCP]
+- writes: [remote files via SSH/SCP, local temp files (/tmp/)]
+- external: [SSH to linked devices, SCP file transfer]
+- destructive: [remote command execution, remote file modification]
+- requires_confirmation: [shutdown, restart, delete, format, install software]
+
+## SSH Options
 
 ```bash
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519"
 SCP_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.openclaw/.ssh/id_ed25519"
 ```
 
-> ⚠️ **Biến không share giữa exec sessions.** Phải re-define `SSH_OPTS`/`SCP_OPTS` mỗi lần chạy lệnh mới.
-
-## Khi nào dùng skill này
-
-- User hỏi về "thiết bị", "device", "máy tính", "laptop", "PC" của họ
-- User muốn chạy lệnh trên máy tính cá nhân
-- User muốn check thông tin, mở app, copy file trên thiết bị
-- User hỏi "kết nối với device nào", "device nào đang online"
+> ⚠️ **Re-define mỗi exec session.** Biến không share giữa các lần chạy lệnh.
 
 ## Bước 1: Đọc danh sách thiết bị
 
 ```bash
-if [ -f ~/.openclaw/devices.json ]; then
-  cat ~/.openclaw/devices.json
-else
-  echo "❌ Chưa có thiết bị nào được liên kết. Hướng dẫn user liên kết device trong Another Me dashboard."
-fi
+cat ~/.openclaw/devices.json 2>/dev/null || echo "❌ Chưa có thiết bị. Hướng dẫn user liên kết device trong Dashboard."
 ```
 
 ### devices.json schema
 
 ```json
-[
-  {
-    "name": "PC Văn Phòng",
-    "ip": "100.123.151.70",
-    "sshUser": "PC",
-    "os": "windows",
-    "status": "online",
-    "lastSeen": "2026-03-14T12:00:00Z"
-  }
-]
+{
+  "devices": [
+    {
+      "id": "device-uuid",
+      "name": "Tên thiết bị",
+      "ip": "100.x.x.x",
+      "sshUser": "username",
+      "platform": "windows | mac | linux",
+      "status": "online | offline",
+      "features": 3,
+      "cua": { "port": 5000, "authToken": "hex", "mode": "background" }
+    }
+  ],
+  "updatedAt": "ISO timestamp"
+}
 ```
 
 | Field | Mô tả |
 |-------|--------|
-| `name` | Tên hiển thị do user đặt |
-| `ip` | Tailscale IP |
-| `sshUser` | SSH username |
-| `os` | `windows` / `macos` / `linux` |
+| `features` | Bitwise: 0=none, 1=SSH, 2=CUA, 3=SSH+CUA |
+| `cua` | CUA config (chỉ có khi `features & 2`). Port: Windows=5000, macOS=8000 |
+| `platform` | `windows` / `mac` / `linux` |
 | `status` | `online` / `offline` (cập nhật mỗi 2 phút) |
-| `lastSeen` | Lần cuối device phản hồi |
+
+### Routing: SSH vs CUA
+
+| Dùng SSH (skill này) | Dùng CUA (→ am-computer-use) |
+|----------------------|------------------------------|
+| Chạy CLI command | Click button, menu, dialog |
+| Install/remove package | Điền form, nhập text vào GUI app |
+| Đọc/sửa file, check system info | Nhìn/đọc nội dung trên màn hình |
+| Copy/move file (scp) | Tương tác GUI app (browser, editor...) |
+| Check process, service, logs | Chụp + phân tích screenshot |
+
+> ⚠️ Nếu `features & 2` và task cần GUI → **chuyển sang am-computer-use**, không làm ở đây.
 
 ## Bước 2: Chọn thiết bị & Kiểm tra status
 
-### Chọn thiết bị
 - **1 device** → dùng luôn
-- **Nhiều device** → match theo keyword user nói ("laptop", "PC", tên device). Nếu vẫn ambiguous → **list ra cho user chọn**, không đoán.
-
-### Kiểm tra status
-**BẮT BUỘC** trước khi SSH:
-- `"status": "online"` → OK, tiến hành SSH
-- `"status": "offline"` → **KHÔNG SSH**. Báo user ngay: "Thiết bị [tên] đang offline. Kiểm tra xem máy có bật và kết nối mạng không."
+- **Nhiều device** → match keyword ("laptop", "PC", tên). Ambiguous → list cho user chọn.
+- **BẮT BUỘC check status**: `"online"` → OK. `"offline"` → KHÔNG SSH, báo user.
 
 ## Bước 3: SSH vào thiết bị
 
@@ -77,114 +96,75 @@ SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/
 ssh $SSH_OPTS {sshUser}@{ip} "{command}"
 ```
 
-### Xử lý kết quả SSH
+### Xử lý kết quả
 
-- **Thành công** (exit 0) → hiển thị output cho user
-- **Connection refused / timeout** (exit 255) → báo user ngay: "Không kết nối được tới thiết bị. Có thể máy đang tắt hoặc mất mạng."
-- **KHÔNG retry nhiều lần** — nếu fail lần đầu, báo user luôn. Không thử lại quá 1 lần.
+- **exit 0** → hiển thị output
+- **exit 255** (connection refused/timeout) → báo user: "Không kết nối được. Máy có thể tắt hoặc mất mạng."
+- **Không retry quá 1 lần** — fail thì báo ngay.
 
-### Ví dụ thực tế
+### Ví dụ
 
 ```bash
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519"
 
-# Check hostname + user
-ssh $SSH_OPTS PC@100.123.151.70 "hostname && whoami"
+# Check hostname
+ssh $SSH_OPTS {sshUser}@{ip} "hostname && whoami"
 
 # System info (Windows)
-ssh $SSH_OPTS PC@100.123.151.70 "systeminfo | findstr /B /C:\"OS\" /C:\"Total Physical\""
+ssh $SSH_OPTS {sshUser}@{ip} "systeminfo | findstr /B /C:\"OS\" /C:\"Total Physical\""
 
-# Chạy PowerShell command
-ssh $SSH_OPTS PC@100.123.151.70 "powershell -Command 'Get-Process | Select -First 10'"
+# PowerShell
+ssh $SSH_OPTS {sshUser}@{ip} "powershell -Command 'Get-Process | Select -First 10'"
 
-# Mở app (Windows) — chỉ hoạt động nếu SSH session có desktop access
-ssh $SSH_OPTS PC@100.123.151.70 "start chrome"
+# Mở app
+ssh $SSH_OPTS {sshUser}@{ip} "start chrome"         # Windows
+ssh $SSH_OPTS {sshUser}@{ip} "open -a 'Google Chrome'" # macOS
 ```
 
-## File Transfer (scp)
+## File Transfer
 
 ```bash
 SCP_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.openclaw/.ssh/id_ed25519"
 
-# Upload file lên thiết bị
+# Upload
 scp $SCP_OPTS /local/file {sshUser}@{ip}:/remote/path
 
-# Download file từ thiết bị
+# Download
 scp $SCP_OPTS {sshUser}@{ip}:/remote/file /local/path
 ```
 
-## Screenshot — Chụp màn hình thiết bị
+## Screenshot (SSH method)
 
-Chụp screenshot từ xa → kéo ảnh về → phân tích bằng vision model.
+> 💡 Nếu device có CUA (`features & 2`), **ưu tiên CUA screenshot** — xem **am-computer-use**.
 
-### Chụp
+**macOS:** `ssh $SSH_OPTS {sshUser}@{ip} "screencapture -x /tmp/am-screenshot.png"`
+**Windows:** `ssh $SSH_OPTS {sshUser}@{ip} "nircmd savescreenshot C:\\Users\\{sshUser}\\am-screenshot.png"`
+**Linux:** `ssh $SSH_OPTS {sshUser}@{ip} "DISPLAY=:0 scrot /tmp/am-screenshot.png"`
 
+Kéo về + phân tích:
 ```bash
-SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -i ~/.openclaw/.ssh/id_ed25519"
 SCP_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -i ~/.openclaw/.ssh/id_ed25519"
+scp $SCP_OPTS {sshUser}@{ip}:/tmp/am-screenshot.png /tmp/am-screenshot.png
+# Dùng tool image để phân tích
 ```
 
-**Mac:**
-```bash
-ssh $SSH_OPTS {user}@{ip} "screencapture -x /tmp/am-screenshot.png"
-```
-
-**Linux (X11):**
-```bash
-ssh $SSH_OPTS {user}@{ip} "DISPLAY=:0 scrot /tmp/am-screenshot.png"
-# Fallback nếu scrot không có:
-ssh $SSH_OPTS {user}@{ip} "DISPLAY=:0 import -window root /tmp/am-screenshot.png"
-```
-
-**Windows (dùng nircmd — recommended):**
-```bash
-ssh $SSH_OPTS {user}@{ip} "nircmd savescreenshot C:\\Users\\{user}\\am-screenshot.png"
-```
-
-Nếu không có `nircmd`, dùng PowerShell:
-```bash
-ssh $SSH_OPTS {user}@{ip} "powershell -File C:\\scripts\\screenshot.ps1"
-```
-> Agent có thể tạo `screenshot.ps1` trên device lần đầu nếu cần.
-
-### Kéo ảnh về
-
-```bash
-# Mac/Linux
-scp $SCP_OPTS {user}@{ip}:/tmp/am-screenshot.png /tmp/am-screenshot.png
-
-# Windows
-scp $SCP_OPTS {user}@{ip}:C:/Users/{user}/am-screenshot.png /tmp/am-screenshot.png
-```
-
-### Phân tích
-
-Dùng tool `image` để phân tích screenshot:
-```
-image(image="/tmp/am-screenshot.png", prompt="Describe what's on screen")
-```
-
-### Dọn dẹp
-
-Sau khi phân tích, xóa file tạm:
-```bash
-ssh $SSH_OPTS {user}@{ip} "rm /tmp/am-screenshot.png"
-rm /tmp/am-screenshot.png
-```
+Sau đó xóa file tạm cả 2 bên.
 
 ## Platform Notes
 
-| Platform | Shell | Path style | Mở app |
-|----------|-------|------------|--------|
-| Windows | `cmd.exe` (default), `powershell -Command '...'` | `C:\Users\PC\Desktop` | `start chrome` |
-| macOS | `zsh` | `/Users/{user}/` | `open -a "Google Chrome"` |
-| Linux | `bash` | `/home/{user}/` | `xdg-open /path/to/file` |
+| Platform | Shell | Path | Mở app |
+|----------|-------|------|--------|
+| Windows | `cmd.exe`, `powershell -Command '...'` | `C:\Users\{user}\` | `start chrome` |
+| macOS | `zsh` | `/Users/{user}/` | `open -a "App Name"` |
+| Linux | `bash` | `/home/{user}/` | `xdg-open /path` |
 
-> ⚠️ **GUI apps qua SSH:** Mở app GUI (Chrome, Finder...) qua SSH có thể không hiện trên màn hình user nếu SSH session không có desktop context. Trên Windows thường hoạt động với `start`. Trên Mac/Linux cần `DISPLAY` env var.
+> ⚠️ **GUI apps qua SSH** có thể không hiện trên desktop user. Windows `start` thường OK. macOS/Linux cần `DISPLAY`.
+>
+> 💡 **Cần tương tác GUI?** → **am-computer-use**
 
 ## Bảo mật
 
-- **KHÔNG** chạy lệnh xóa/format mà không hỏi user trước
-- **KHÔNG** đọc hoặc gửi file chứa mật khẩu, key, token ra ngoài
-- **KHÔNG** install software trên device mà không hỏi user
-- Luôn confirm với user trước khi thực hiện thao tác nguy hiểm (shutdown, restart, delete)
+- **KHÔNG** xóa/format mà không confirm user
+- **KHÔNG** đọc/gửi file chứa passwords, keys, tokens
+- **KHÔNG** install software mà không confirm user
+- **LUÔN** confirm trước: shutdown, restart, delete, format, install

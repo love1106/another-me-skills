@@ -11,11 +11,11 @@
   {
     "slug": "am-devices",
     "name": "My Devices",
-    "description": "Điều khiển thiết bị của user qua SSH — chạy lệnh, check thông tin, mở app",
+    "description": "Điều khiển thiết bị của user qua SSH và CUA (Computer-Use Agent). SSH-first, CUA-fallback. Chạy lệnh, check thông tin, mở app, screenshot, GUI control, transfer file.",
     "category": "utility",
-    "tags": ["devices", "ssh", "remote"],
+    "tags": ["devices", "ssh", "remote", "cua", "computer-use", "gui", "screenshot"],
     "repo_path": "am-devices",
-    "version": "1.0.0"
+    "version": "2.0.0"
   },
   {
     "slug": "am-create-skill",
