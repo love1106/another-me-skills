@@ -125,10 +125,19 @@ User click Login → POST /login (generate PKCE, store verifier in httpOnly cook
 class IdentityClient {
   constructor(env: { IDENTITY_SERVER_URL, CLIENT_ID, CLIENT_SECRET }) { ... }
 
+  // Build OAuth authorize URL (với PKCE + state)
   buildAuthorizeUrl(params: { provider, codeChallenge, state, scope? }): string
+
+  // Exchange authorization code for tokens
   exchangeCode(params: { code, codeVerifier }): Promise<TokenResponse>
+
+  // Refresh access token
   refreshToken(refreshToken: string): Promise<TokenResponse>
+
+  // Revoke token on logout
   revokeToken(token: string): Promise<void>
+
+  // Get user info
   getUserInfo(accessToken: string): Promise<UserInfo>
 }
 ```
@@ -138,6 +147,7 @@ class IdentityClient {
 // Validate JWT locally using JWKS (RS256) — no introspection needed (<5ms)
 // Proactive refresh: nếu token < 5 phút trước khi hết hạn → auto refresh
 // Invalid/expired → redirect /login
+
 authMiddleware() → validates access_token cookie → sets c.user → next()
 ```
 
@@ -163,32 +173,62 @@ npx expo install expo-web-browser expo-secure-store expo-apple-authentication
 npm install @react-native-google-signin/google-signin
 ```
 
-**2. OAuth flow (platform-specific best UX):**
-```
-iOS:  Apple → Native Sign-In → exchange token | Google → expo-web-browser → PKCE
-Android: Google → Native one-tap → exchange ID token | Apple → expo-web-browser → PKCE
+**2. Env vars:**
+```env
+EXPO_PUBLIC_CLIENT_ID=mobile-client
+EXPO_PUBLIC_IDENTITY_SERVER_URL=https://auth.example.com
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=xxx.apps.googleusercontent.com
 ```
 
-**3. Token storage:** `expo-secure-store` (Keychain iOS, EncryptedSharedPreferences Android)
+**3. OAuth flow (platform-specific best UX):**
+```
+iOS:
+  - Apple → Native Apple Sign-In (Face ID/Touch ID) → exchange identity token
+  - Google → Web-based OAuth (expo-web-browser) → PKCE flow
 
-**4. Auth hook:**
+Android:
+  - Google → Native Google Sign-In (one-tap) → exchange ID token
+  - Apple → Web-based OAuth (expo-web-browser) → PKCE flow
+```
+
+**4. Token storage:** `expo-secure-store` (Keychain on iOS, EncryptedSharedPreferences on Android)
+
+**5. Auth hook (wrap entire app):**
 ```tsx
+// AuthProvider wraps app, provides:
 const { isAuthenticated, isLoading, user, login, logout, getAccessToken } = useAuth();
+
+// Login
+await login('google');  // or 'apple'
+
+// Get valid token (auto-refresh if near expiry)
+const token = await getAccessToken();
+
+// Logout
+await logout();
 ```
 
-**5. Auto refresh:** Token tự refresh khi < 5 phút trước expiry via `getValidAccessToken()`.
+**6. Auto refresh:** Token tự refresh khi < 5 phút trước expiry via `getValidAccessToken()`.
 
 #### API Endpoints (Identity Server)
 
 ```
 OAuth:
-  GET  /oauth/authorize | POST /oauth/token | POST /oauth/revoke
-  GET  /oauth/userinfo | GET /.well-known/openid-configuration | GET /.well-known/jwks.json
+  GET  /oauth/authorize          → Initiate auth flow
+  POST /oauth/token              → Exchange code/refresh for tokens
+  POST /oauth/revoke             → Revoke token
+  GET  /oauth/userinfo           → Get user claims
+  GET  /.well-known/openid-configuration
+  GET  /.well-known/jwks.json
 
-Tenant self-service (Basic Auth client_id:client_secret):
-  GET/PATCH /api/v1/tenant | GET/POST /api/v1/tenant/credentials
-  POST /api/v1/tenant/credentials/:id/rotate
-  GET/POST /api/v1/tenant/redirect-uris | GET/POST /api/v1/tenant/allowed-apps
+Tenant self-service (Basic Auth với client_id:client_secret):
+  GET/PATCH /api/v1/tenant                    → Tenant info
+  GET/POST  /api/v1/tenant/credentials        → Manage credentials
+  POST      /api/v1/tenant/credentials/:id/rotate
+  GET/POST  /api/v1/tenant/redirect-uris      → Manage redirect URIs
+  GET/POST  /api/v1/tenant/allowed-apps       → Manage allowed apps
+
+Swagger UI: /docs
 ```
 
 ## Hosting & Deploy
