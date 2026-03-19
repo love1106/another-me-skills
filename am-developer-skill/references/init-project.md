@@ -164,7 +164,7 @@ Báo user:
 - 📦 Template: `$TEMPLATE`
 - 🔗 GitHub: `<repo-url>`
 - 🐳 Docker: `docker build -t $PROJECT_NAME .`
-- 🔧 Tiếp theo: dùng `hc-developer-skill` để phát triển features
+- 🔧 Tiếp theo: dùng `am-developer-skill` để phát triển features
 
 ## Available Templates
 

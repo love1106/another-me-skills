@@ -63,7 +63,7 @@ ls -la /tmp/claude-*.log 2>/dev/null
 grep -l "developer\|coding\|Claude CLI\|spawn\|retry\|build\|PR" ~/. openclaw/workspace/memory/*.md 2>/dev/null
 
 # 4. Skill's own Lessons Learned section
-grep -A 50 "## Lessons Learned" ~/.openclaw/workspace/skills/hc-developer-skill/SKILL.md
+grep -A 50 "## Lessons Learned" ~/.openclaw/workspace/skills/am-developer-skill/SKILL.md
 ```
 
 ### Signals to Extract

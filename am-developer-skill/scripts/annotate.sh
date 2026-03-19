@@ -1,5 +1,5 @@
 #!/bin/bash
-# hc-developer-skill — Manage per-project annotations (learning loop)
+# am-developer-skill — Manage per-project annotations (learning loop)
 #
 # Usage:
 #   annotate.sh add    --project <name> [--scope <module>] --text <note> [--tags <t1,t2>]
@@ -12,7 +12,7 @@
 #                      # Output formatted block to stdout, IDs to stderr (INJECTED_IDS:id1,id2,...)
 #   annotate.sh stats  [--project <name>]                     # summary stats
 #
-# Annotations stored in: ~/.openclaw/workspace/memory/hc-developer-skill-annotations/<project>.jsonl
+# Annotations stored in: ~/.openclaw/workspace/memory/am-developer-skill-annotations/<project>.jsonl
 #
 # Entry format (JSONL):
 # {
@@ -30,7 +30,7 @@
 
 set -euo pipefail
 
-ANNOTATIONS_DIR="${HOME}/.openclaw/workspace/memory/hc-developer-skill-annotations"
+ANNOTATIONS_DIR="${HOME}/.openclaw/workspace/memory/am-developer-skill-annotations"
 mkdir -p "$ANNOTATIONS_DIR"
 
 # --- Helpers ---
