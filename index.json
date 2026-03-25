@@ -24,7 +24,7 @@
     "category": "developer",
     "tags": ["skill", "create", "analyze", "improve", "review", "audit", "refactor"],
     "repo_path": "am-create-skill",
-    
+    "version": "1.0.0"
   },
   {
     "slug": "am-research-skill",
@@ -33,6 +33,6 @@
     "category": "research",
     "tags": ["research", "search", "scrape", "browser", "playwright", "scrapling", "fact-check", "comparison", "market-research"],
     "repo_path": "am-research-skill",
-    
+    "version": "1.1.0"
   }
 ]
