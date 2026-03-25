@@ -1,6 +1,6 @@
 ---
 name: am-research-skill
-version: 1.0.0
+version: 1.1.0
 author: khoidoan
 description: >
   Research skill — deep web search, scraping, browser automation, and information gathering
@@ -18,57 +18,44 @@ description: >
 
 Deep research via search APIs + web scraping. Structured methodology cho mọi loại research.
 
+## ⚡ Budget Awareness
+
+Mỗi search/fetch call tốn tokens → tốn stamina. Control depth theo task:
+
+| Research Type | Max Queries | Max Scrape Calls | Khi nào |
+|---|---|---|---|
+| Quick lookup | 1-2 | 0 | Câu hỏi đơn giản, fact check nhanh |
+| Standard | 3-5 | 1-2 | So sánh, technical research |
+| Deep dive | 5-10 | 3-5 | Market research, competitive analysis |
+
+**Quy tắc:** Bắt đầu từ ít queries nhất. Chỉ escalate khi kết quả chưa đủ. KHÔNG search 10 queries ngay từ đầu.
+
 ## Prerequisites
 
 Browser automation cần cài thêm tools. Chạy **1 lần duy nhất** trên server:
 
 ```bash
-# 1. Cài Scrapling + Playwright (browser automation)
-pip install --break-system-packages scrapling[all]
-scrapling install
-
-# 2. Cài Playwright browsers
-playwright install chromium
-playwright install-deps chromium
-
-# 3. (Optional) Tavily Search — deep search với AI summary
-# Cần đăng ký tại https://tavily.com → lấy API key (free tier có)
-# Thêm vào ~/.env: TAVILY_API_KEY=tvly-xxxxx
-# Không có? web_search built-in đủ dùng cho hầu hết cases
+pip install --break-system-packages scrapling[all] && scrapling install
+playwright install chromium && playwright install-deps chromium
+# Optional: TAVILY_API_KEY=tvly-xxxxx trong ~/.env
 ```
 
-**Verify:**
-```bash
-python3 -c "from scrapling.fetchers import Fetcher; print('Scrapling OK')"
-playwright --version
-```
+**Không cài?** Skill vẫn chạy được với `web_search` + `web_fetch`. Browser automation chỉ cần khi gặp SPA/JS-rendered pages.
 
-**Không cài?** Skill vẫn chạy được với `web_search` + `web_fetch` (built-in). Browser automation chỉ cần khi gặp SPA/JS-rendered pages.
-
-## Tool Selection
+## Tool Selection (Escalation Path)
 
 ```
-Cần research?
-  ├─ Quick answer, 1-2 sources → web_search (built-in)
-  ├─ Deep research, AI summary → Tavily Search (optional, cần API key)
-  ├─ Static page content → web_fetch (built-in)
-  ├─ JS-rendered / SPA → Browser Scraper (dynamic mode)
-  ├─ Anti-bot / Cloudflare → Browser Scraper (stealth mode)
-  ├─ Form interaction (dropdown, click, submit) → Browser Scraper (interact mode)
-  └─ Crawl multi-page structured data → Browser Scraper (interact + pagination)
+web_search → web_fetch → Browser dynamic → Browser stealth → Browser interact
 ```
 
-| Tool | Khi nào | API Key? | Reference |
-|------|---------|----------|-----------|
-| `web_search` | Quick search, hầu hết cases | Không | Built-in |
-| `web_fetch` | Đọc 1 URL đã biết, static page | Không | Built-in |
-| Tavily Search | Deep search, AI summary, multi-source | `TAVILY_API_KEY` | `references/tavily-search.md` |
-| Browser Scraper | JS-rendered, SPA, forms, anti-bot, pagination | Không | `references/browser-scraper.md` |
+| Tool | Khi nào | Reference |
+|------|---------|-----------|
+| `web_search` | Quick search, hầu hết cases | Built-in |
+| `web_fetch` | Đọc 1 URL đã biết, static page | Built-in |
+| Tavily Search | Deep search + AI summary (cần `TAVILY_API_KEY`) | `references/tavily-search.md` |
+| Browser Scraper | JS-rendered, SPA, forms, anti-bot | `references/browser-scraper.md` |
 
-**Notes:**
-- Scrapling (trong `references/web-scraper.md`) là thư viện Python bên dưới Browser Scraper.
-- Dùng `scripts/browser-scrape.py` thay vì gọi Scrapling trực tiếp — script đã wrap đầy đủ 3 modes.
-- **Ưu tiên `interact` mode** cho extract data — `dynamic`/`stealth` modes (Scrapling) CSS selector có thể trả rỗng cho một số sites. `interact` mode (Playwright trực tiếp) extract chính xác hơn.
+**Luôn dùng `scripts/browser-scrape.py`** thay vì gọi Scrapling trực tiếp. Ưu tiên `interact` mode cho extract data — chính xác hơn `dynamic`/`stealth`.
 
 ## Workflow
 
@@ -190,38 +177,21 @@ python3 scripts/browser-scrape.py --url "URL" --mode dynamic --screenshot /tmp/p
 ```
 Kết quả tất cả `extract` actions gộp vào `extracted[]` array.
 
-#### Error Handling & Retry
+#### Error Handling
 
-Khi browser scraping thất bại:
-
-```
-Browser error?
-  ├─ Timeout → tăng --timeout (60000+), thêm wait actions
-  ├─ Element not found → screenshot trước để debug selector
-  ├─ Anti-bot / CAPTCHA → chuyển sang stealth mode
-  ├─ Page crash → retry tối đa 2 lần, giảm disable_resources
-  └─ Data incomplete → check pagination, scroll to load more
-```
-
-**Auto-retry strategy:**
-1. Lần 1: chạy bình thường
-2. Lần 2: tăng timeout + thêm wait
-3. Lần 3: đổi mode (dynamic → stealth) hoặc thêm screenshot debug
-4. Sau 3 lần fail → báo user kèm screenshot + error details
+Script `browser-scrape.py` tự retry 2 lần. Nếu vẫn fail:
+1. Thêm `--screenshot /tmp/debug.png` để xem page state
+2. Escalate mode: `dynamic` → `stealth` → `interact`
+3. Tăng `--timeout 60000` nếu page load chậm
+4. Sau 3 lần fail → báo user kèm screenshot
 
 **Repo research — flow riêng:**
 ```
-1. Clone shallow: git clone --depth 1 <url> /tmp/<repo-name>
-2. Đọc README.md → hiểu mục đích, stack, setup
-3. Xem structure: find . -type f | head -50, cat package.json
-4. Đọc key files: entry points, config, architecture docs
-5. Tổng hợp: stack, features, patterns, đánh giá quality
+git clone --depth 1 <url> /tmp/<repo-name>
+→ README.md → package.json → key files → tổng hợp
 ```
-Kết hợp web search nếu cần thêm context (blog posts, reviews về repo đó).
 
-**Parallel khi có thể:** Nếu queries independent → chạy song song (multiple web_search hoặc Tavily calls).
-
-**Rate limiting:** Tavily — max 2-3 calls liên tiếp, chờ 1-2s giữa các call.
+**Rate limiting:** Tavily max 2-3 calls liên tiếp, chờ 1-2s giữa các call.
 
 ### Step 4: Cross-Reference & Validate
 
@@ -240,91 +210,25 @@ Kết hợp web search nếu cần thêm context (blog posts, reviews về repo 
 
 ### Step 5: Output
 
-Format theo research type:
+Format theo research type — mọi output PHẢI có sources:
 
-**Quick lookup:**
-> [Answer] — Source: [URL]
-
-**Comparison:**
-```
-## So sánh X vs Y
-
-| Tiêu chí | X | Y |
-|-----------|---|---|
-| Performance | ... | ... |
-| DX | ... | ... |
-| Ecosystem | ... | ... |
-
-**Kết luận:** [recommendation + reasoning]
-
-**Sources:** [list URLs]
-```
-
-**Fact-check:**
-```
-## Fact Check: [claim]
-
-**Verdict:** ✅ Đúng / ❌ Sai / ⚠️ Partly true
-
-**Evidence:**
-- Source 1: [support/contradict] — [URL]
-- Source 2: [support/contradict] — [URL]
-
-**Nuance:** [nếu có]
-```
-
-**Market research / Deep-dive:**
-```
-## [Topic] Research Report
-
-### Executive Summary
-[2-3 câu tóm tắt]
-
-### Findings
-#### [Sub-topic 1]
-...
-#### [Sub-topic 2]
-...
-
-### Key Takeaways
-- ...
-
-### Limitations
-- [data gaps, bias, outdated info]
-
-### Sources
-1. [title] — [URL] (published [date])
-```
-
-**Dynamic site scrape / Data collection:**
-```
-## Scrape Report: [site/topic]
-
-**Source:** [URL]
-**Method:** Browser Scraper ([mode])
-**Records:** [N items collected]
-**Pages scraped:** [N/total]
-
-### Data
-[table hoặc structured list]
-
-### Notes
-- [data completeness: full / partial]
-- [cần login? bị rate limit?]
-- [thời điểm scrape]
-```
+| Type | Format |
+|------|--------|
+| Quick lookup | `[Answer] — Source: [URL]` |
+| Comparison | Table (tiêu chí × options) + kết luận + sources |
+| Fact-check | Verdict (✅/❌/⚠️) + evidence từ ≥2 sources |
+| Deep-dive | Executive summary → findings → key takeaways → limitations → sources |
+| Scrape | Source URL + method + records count + data (table/list) + completeness notes |
 
 ## Rules
 
-1. **Luôn cite sources** — mỗi claim phải có URL đi kèm
-2. **Ghi rõ confidence level** — đặc biệt khi ít sources hoặc info conflicting
-3. **Không hallucinate data** — nếu không tìm thấy → nói thẳng "không tìm thấy info về X"
-4. **Prefer recent** — ưu tiên sources < 1 năm tuổi, flag nếu dùng sources cũ
-5. **Separate fact vs opinion** — ghi rõ đâu là data, đâu là nhận định
-6. **Escalate tools, don't give up** — nếu web_fetch trống → thử browser dynamic → stealth → interact
-7. **Screenshot khi debug** — browser fail? chụp screenshot trước khi retry để xem page state
-8. **Respect rate limits** — chờ giữa các request, không spam site liên tục
-9. **Data scraping ethics** — chỉ scrape public data, tôn trọng robots.txt, không bypass auth trừ khi user cung cấp credentials
+1. **Cite sources** — mỗi claim phải có URL
+2. **Ghi confidence** — ≥3 sources đồng ý = high, 1 source = "chưa verify"
+3. **Không hallucinate** — không tìm thấy → nói thẳng
+4. **Prefer recent** — ưu tiên < 1 năm, flag sources cũ
+5. **Escalate tools** — web_fetch trống → browser dynamic → stealth → interact
+6. **Respect limits** — chờ giữa requests, chỉ scrape public data, tôn trọng robots.txt
+7. **Budget first** — bắt đầu ít queries, chỉ escalate khi thiếu data (xem Budget Awareness)
 
 ## Permissions
 
