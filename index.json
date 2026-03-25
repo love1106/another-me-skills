@@ -25,5 +25,14 @@
     "tags": ["skill", "create", "analyze", "improve", "review", "audit", "refactor"],
     "repo_path": "am-create-skill",
     "version": "1.0.0"
+  },
+  {
+    "slug": "am-research-skill",
+    "name": "Research Skill",
+    "description": "Deep web search, scraping, browser automation, and information gathering with structured output. Handles static pages, SPAs, JS-rendered content, form interactions, and anti-bot bypasses via Playwright/Scrapling.",
+    "category": "research",
+    "tags": ["research", "search", "scrape", "browser", "playwright", "scrapling", "fact-check", "comparison", "market-research"],
+    "repo_path": "am-research-skill",
+    "version": "1.0.0"
   }
 ]
