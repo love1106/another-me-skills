@@ -4,16 +4,34 @@
     "name": "Developer Skill",
     "description": "Developer workflow for ALL coding tasks. Handles: init project, security review, Claude Code CLI with retry, planning, GitHub tracking, branching, verification, PR creation. CLI error tracking with auto-log and retrospect analysis.",
     "category": "developer",
-    "tags": ["coding", "development", "git", "claude", "cli", "tunnel", "preview", "gitnexus", "testing"],
+    "tags": [
+      "coding",
+      "development",
+      "git",
+      "claude",
+      "cli",
+      "tunnel",
+      "preview",
+      "gitnexus",
+      "testing"
+    ],
     "repo_path": "am-developer-skill",
-    "version": "1.10.0"
+    "version": "2.0.0"
   },
   {
     "slug": "am-devices",
     "name": "My Devices",
     "description": "Điều khiển thiết bị của user qua SSH và CUA (Computer-Use Agent). SSH-first, CUA-fallback. Chạy lệnh, check thông tin, mở app, screenshot, GUI control, transfer file.",
     "category": "utility",
-    "tags": ["devices", "ssh", "remote", "cua", "computer-use", "gui", "screenshot"],
+    "tags": [
+      "devices",
+      "ssh",
+      "remote",
+      "cua",
+      "computer-use",
+      "gui",
+      "screenshot"
+    ],
     "repo_path": "am-devices",
     "version": "2.0.0"
   },
@@ -22,7 +40,15 @@
     "name": "Skill Manager",
     "description": "Create, analyze, or improve OpenClaw skills — full lifecycle management with orchestrator pattern support, complexity scoring, and multi-round review.",
     "category": "developer",
-    "tags": ["skill", "create", "analyze", "improve", "review", "audit", "refactor"],
+    "tags": [
+      "skill",
+      "create",
+      "analyze",
+      "improve",
+      "review",
+      "audit",
+      "refactor"
+    ],
     "repo_path": "am-create-skill",
     "version": "1.0.0"
   },
@@ -31,7 +57,17 @@
     "name": "Research Skill",
     "description": "Deep web search, scraping, browser automation, and information gathering with structured output. Handles static pages, SPAs, JS-rendered content, form interactions, and anti-bot bypasses via Playwright/Scrapling.",
     "category": "research",
-    "tags": ["research", "search", "scrape", "browser", "playwright", "scrapling", "fact-check", "comparison", "market-research"],
+    "tags": [
+      "research",
+      "search",
+      "scrape",
+      "browser",
+      "playwright",
+      "scrapling",
+      "fact-check",
+      "comparison",
+      "market-research"
+    ],
     "repo_path": "am-research-skill",
     "version": "1.1.0"
   }

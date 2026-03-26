@@ -1,5 +1,5 @@
 #!/bin/bash
-# am-developer-skill — Log Claude CLI run result to JSONL
+# hc-developer-skill — Log Claude CLI run result to JSONL
 # Usage: log-cli-run.sh [options]
 #   --project <name>       Project/repo name
 #   --task <description>   Task description

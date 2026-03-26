@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-am-developer-skill — CLI Retrospect Tool
+hc-developer-skill — CLI Retrospect Tool
 Parse cli-runs.jsonl, aggregate errors, generate report, auto-trim old entries.
 
 Usage:
@@ -277,7 +277,7 @@ BY MODEL
 
 def annotation_report():
     """Scan annotations: flag high-hit for promotion, stale for archiving."""
-    ann_dir = WORKSPACE / "memory" / "am-developer-skill-annotations"
+    ann_dir = WORKSPACE / "memory" / "hc-developer-skill-annotations"
     if not ann_dir.exists():
         return
 

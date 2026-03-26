@@ -15,7 +15,9 @@ Agent chạy verification trực tiếp qua exec sau khi Claude CLI hoàn thành
 Lite mode skip type check, lint, tests, security scan — dùng khi thay đổi nhỏ, isolated, low-risk.
 
 ```bash
-cd ~/projects/<repo>
+# Dùng WORKDIR từ Step 4 (KHÔNG hardcode repo path)
+WORKDIR=$(cat /tmp/openclaw-workdir-$$.txt 2>/dev/null || echo ~/projects/<repo>)
+cd "$WORKDIR"
 source <skill_dir>/scripts/detect-env.sh
 ```
 

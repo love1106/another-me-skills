@@ -242,6 +242,69 @@ NEXT_PUBLIC_GA_ID=G-XXXXXXX
 - Publishable keys (Stripe pk_, GA ID, app URL) → OK dùng `NEXT_PUBLIC_`
 - Nếu cần secret ở client → gọi qua API Route (server-side) rồi trả result về
 
+## 10. TypeScript: Strict Types, No `any`
+
+**`any` = vô hiệu hóa TypeScript.** Dùng `unknown` + type narrowing thay thế.
+
+```typescript
+// ❌ any = bypass mọi type check
+function process(data: any) {
+  return data.items.map((i: any) => i.name);  // no safety
+}
+
+// ✅ unknown + narrowing
+function process(data: unknown): string[] {
+  if (!data || typeof data !== "object") throw new Error("Invalid data");
+  if (!("items" in data) || !Array.isArray((data as { items: unknown }).items)) {
+    throw new Error("Missing items array");
+  }
+  return (data as { items: { name: string }[] }).items.map(i => i.name);
+}
+
+// ✅ Better: define types
+interface OrderData {
+  items: { name: string; qty: number }[];
+}
+
+function process(data: OrderData): string[] {
+  return data.items.map(i => i.name);
+}
+```
+
+**Discriminated unions cho state management:**
+```typescript
+// ❌ Boolean flags = combinatorial explosion
+interface Request {
+  loading: boolean;
+  error: string | null;
+  data: Data | null;
+  // loading=false, error=null, data=null = ??? invalid state is possible
+}
+
+// ✅ Discriminated union = only valid states
+type Request =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; error: string }
+  | { status: "success"; data: Data };
+
+function render(req: Request) {
+  switch (req.status) {
+    case "idle": return null;
+    case "loading": return <Spinner />;
+    case "error": return <Error msg={req.error} />;  // error guaranteed
+    case "success": return <View data={req.data} />;  // data guaranteed
+  }
+}
+```
+
+**Rules:**
+- `any` chỉ cho migration code (legacy JS → TS) hoặc 3rd-party lib thiếu types — phải comment `// TODO: type properly`
+- Function return types: explicit cho public APIs / exported functions
+- Prefer `interface` cho object shapes, `type` cho unions/intersections
+- `as` type assertion = code smell — chỉ dùng khi compiler không thể narrow (ví dụ DOM APIs)
+- Enable `strict: true` trong tsconfig.json
+
 ## Tóm tắt — Inject vào Claude CLI Prompt
 
 ```
@@ -255,4 +318,5 @@ Coding rules (MUST follow):
 7. Don't mutate function params — spread/clone before modifying
 8. Error messages must include: what failed + actual values
 9. Next.js: NEVER use NEXT_PUBLIC_ for secrets (DB, API keys, tokens) — only for public config
+10. TypeScript: no `any` (use unknown + narrowing), discriminated unions for state, explicit return types for public APIs
 ```
