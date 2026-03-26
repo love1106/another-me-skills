@@ -16,7 +16,8 @@
       "testing"
     ],
     "repo_path": "am-developer-skill",
-    "version": "2.3.0"
+    "version": "2.3.0",
+    "author_name": "khoidoan"
   },
   {
     "slug": "am-devices",
@@ -33,7 +34,8 @@
       "screenshot"
     ],
     "repo_path": "am-devices",
-    "version": "2.0.0"
+    "version": "2.0.0",
+    "author_name": "khoidoan"
   },
   {
     "slug": "am-create-skill",
@@ -50,7 +52,8 @@
       "refactor"
     ],
     "repo_path": "am-create-skill",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "author_name": "khoidoan"
   },
   {
     "slug": "am-research-skill",
@@ -69,6 +72,7 @@
       "market-research"
     ],
     "repo_path": "am-research-skill",
-    "version": "2.1.0"
+    "version": "2.1.0",
+    "author_name": "khoidoan"
   }
 ]
