@@ -1,6 +1,6 @@
 ---
 name: am-developer-skill
-version: 2.0.0
+version: 2.1.0
 author: khoidoan
 description: >
   Developer workflow for ALL coding tasks. Handles: init project, security review, self-improve,
@@ -17,19 +17,22 @@ description: >
 
 Developer workflow for ALL coding tasks — quick edits to complex multi-file features.
 
-**Projects path:** `~/projects/<repo>` (`~` = actual home dir, e.g. `/root` hoặc `/home/coder`)
+**Projects path:** Detect từ environment. Thường là `~/projects/<repo>` hoặc repo đã clone sẵn.
+Nếu chưa có repo → `git clone` vào `~/projects/` trước khi bắt đầu.
 
 ## Permissions
 
 **reads:** source code, git history, configs | **writes:** source files, branches, lock files, CLI logs, annotations
-**external:** GitHub (`gh`), Claude Code CLI, GitNexus, Cloudflare tunnel | **destructive:** `git reset --soft`, `git stash`, branch delete
+**external:** GitHub (`gh` — nếu có), Claude Code CLI, GitNexus (optional) | **destructive:** `git reset --soft`, `git stash`, branch delete
 **requires_confirmation:** irreversible actions (DB prod, delete data, deploy prod)
+
+> ⚠️ **Tool availability varies per agent.** Trước khi dùng tool nào, check: `command -v <tool> &>/dev/null`. Không có → skip bước đó hoặc dùng alternative.
 
 ## ⛔ Hard Rules (NEVER VIOLATE)
 
 | # | Rule | Key Point |
 |---|------|-----------|
-| 1 | **NEVER self-code** | Agent = orchestrator. Mọi code → Claude CLI (Step 5). Exception: edit < 3 dòng trivial |
+| 1 | **Prefer Claude CLI** | Có Claude CLI → dùng nó (Step 5). Không có → agent tự code, nhưng vẫn follow process (plan → verify). Exception: edit < 3 dòng trivial |
 | 2 | **MUST report failures** | 3 attempts fail → BÁO USER NGAY: lỗi gì, retry mấy lần, đề xuất hướng xử lý |
 | 3 | **MUST monitor spawns** | Poll 30-60s. Spawn rồi quên = BUG |
 | 4 | **MUST update progress** | Spawn → báo ETA. Done → báo kết quả. **Im lặng > 2 phút = BUG** |
@@ -260,51 +263,50 @@ echo "$WORKDIR" > /tmp/openclaw-workdir-$$.txt  # save cho Step 5, 6, 8
 **Hotfix:** `worktree.sh acquire` + `git reset --hard $(git describe --tags --abbrev=0)`. Skip Step 2-3.
 **Status:** `bash <skill_dir>/scripts/worktree.sh status ~/projects/<repo>`
 
-### Step 5: Code with Claude CLI
+### Step 5: Implement Code
 
-**Chi tiết đầy đủ:** [references/claude-cli-guide.md](references/claude-cli-guide.md) — spawn, prompt strategy, timeout/retry, parse result, environment, monitoring, logging, annotations.
+**2 modes tuỳ môi trường:**
 
-**⚡ Hot Reload First:** Nếu application hỗ trợ hot reload (Next.js, Expo, Vite...), luôn ưu tiên dev server + hot reload.
+#### Mode A: Claude CLI available (`command -v claude &>/dev/null`)
 
-**Quy tắc cốt lõi:**
-- Claude CLI **chỉ edit files, KHÔNG commit** — git managed ở Step 8
-- Respect `.claude/instructions.md` và project conventions
-- Mỗi subtask ~1-2 phút (Hard Rule #5). Task lớn → chia subtasks trước khi spawn
-- **Inject vào prompt** (theo thứ tự):
-  1. **Scout findings** (Step 1a) — root cause, file:line, blast radius → Claude Code biết chính xác chỗ cần fix
-  2. **Coding rules** ([references/coding-rules.md](references/coding-rules.md)) — 10 defensive programming rules
-  3. **Annotations** (nếu có) — project-specific gotchas
-  4. Cuối prompt: `"DO NOT git commit or push."`
+Chi tiết: [references/claude-cli-guide.md](references/claude-cli-guide.md)
 
-**Quick spawn:**
 ```bash
 bash <skill_dir>/scripts/spawn.sh <WORKDIR> <MODEL> "YOUR PROMPT"
-# Resume: bash <skill_dir>/scripts/spawn.sh <WORKDIR> <MODEL> "continue..." <SESSION_UUID>
-# Custom timeout (default 180s): bash <skill_dir>/scripts/spawn.sh <WORKDIR> <MODEL> "PROMPT" "" 120
+# Timeout default 180s. Exit 124 = timed out → chia nhỏ hơn
 ```
-⏱️ **Timeout:** Default 180s. Exit code 124 = timed out → chia subtask nhỏ hơn (Hard Rule #5).
 
-**Sau mỗi spawn — BẮT BUỘC:**
-1. Parse result → check `is_error` → retry nếu fail (max 3, mỗi lần khác strategy)
-2. Log CLI run (`scripts/log-cli-run.sh`)
-3. Report kết quả cho user
-4. Capture learnings (`scripts/annotate.sh`) nếu có retry/discoveries
+Inject vào prompt: scout findings → coding rules → annotations → `"DO NOT git commit or push."`
 
-📖 **Đọc full reference** khi cần: retry strategy chi tiết, env setup, session resume, prompt injection checklist (annotations, GitNexus, unit testing rules).
+Sau spawn: parse `is_error` → retry max 3 → log (`scripts/log-cli-run.sh`) → report user.
 
-### Step 5.10: Browser Verification (PinchTab)
+#### Mode B: Self-code (Claude CLI không có)
 
-**BẮT BUỘC cho frontend/fullstack tasks.** Skip: backend-only, trivial Quick tasks, hotfix.
+Agent tự implement, nhưng **vẫn follow process**:
+- Đọc [references/coding-rules.md](references/coding-rules.md) trước khi code — 10 rules bắt buộc
+- Chunk tasks: mỗi lần edit 1-2 files, verify trước khi tiếp
+- **KHÔNG commit** — git managed ở Step 8
+- Report progress cho user sau mỗi file/module
+
+**Quy tắc chung (cả 2 modes):**
+- Respect `.claude/instructions.md` và project conventions
+- **⚡ Hot Reload First:** Nếu app hỗ trợ (Next.js, Vite...) → ưu tiên dev server + hot reload
+
+### Step 5.10: Browser Verification (nếu có tool)
+
+**Cho frontend/fullstack tasks.** Skip: backend-only, Quick tasks, hotfix, hoặc không có browser tool.
 
 ```bash
-pgrep -f "pinchtab" || (pinchtab &>/tmp/pinchtab.log &); sleep 3
-pinchtab nav http://localhost:<port>/<path>
-pinchtab snap -i -c && pinchtab text
-pinchtab screenshot -o /tmp/verify-<feature>.png  # evidence cho PR
+# PinchTab (nếu có)
+command -v pinchtab &>/dev/null && {
+  pgrep -f "pinchtab" || (pinchtab &>/tmp/pinchtab.log &); sleep 3
+  pinchtab nav http://localhost:<port>/<path>
+  pinchtab snap -i -c && pinchtab text
+}
+# Không có PinchTab → curl smoke test hoặc skip, note trong verification report
 ```
 
-⚠️ UI không đúng → FIX trước (gọi lại Claude CLI), KHÔNG tiếp Step 6.
-Chi tiết: [references/browser-verify.md](references/browser-verify.md)
+⚠️ UI không đúng → FIX trước, KHÔNG tiếp Step 6.
 
 ### Step 6: Verification Pipeline
 
@@ -329,12 +331,11 @@ Sau build pass, TRƯỚC khi declare done:
 
 ⚠️ Build pass ≠ done. FAIL → fix → chạy lại pipeline. **KHÔNG tạo PR khi còn FAIL.**
 
-### Step 7: Dev Preview (Cloudflare Tunnel)
+### Step 7: Dev Preview (Optional)
 
-**Trigger:** User nói "test thử", "cho anh xem", "manual test", "review UI", hoặc yêu cầu link preview.
-**Bỏ qua** nếu task nhỏ, backend-only, hoặc user mở localhost trực tiếp được.
+**Trigger:** User yêu cầu xem trước. **Skip** nếu task nhỏ, backend-only, hoặc không có tunnel tool.
 
-Chi tiết tại `references/dev-preview.md`. Flow: start dev server → wait ready → start tunnel → gửi link → giữ alive → cleanup khi user xong.
+Nếu có `cloudflared` → [references/dev-preview.md](references/dev-preview.md). Không có → chạy dev server, báo user localhost URL.
 
 ### Step 8: Create Pull Request & Cleanup Worktree
 
@@ -361,12 +362,18 @@ fi
 git push origin <branch-name>
 
 # Quick tasks: commit-only path (skip PR nếu user cho phép)
-# Standard path: tạo PR
-REPO=$(git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
-gh pr create --repo "$REPO" \
-  --title "<type>(<scope>): <description>" --assignee @me \
-  --body "## Changes\n- ...\n\n## Verification Report\n<Step 6.8>\n\nCloses #<N>" \
-  --base $DEFAULT_BRANCH
+# Standard path: tạo PR (nếu có gh CLI)
+if command -v gh &>/dev/null; then
+  REPO=$(git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
+  gh pr create --repo "$REPO" \
+    --title "<type>(<scope>): <description>" --assignee @me \
+    --body "## Changes\n- ...\n\n## Verification Report\n<Step 6.8>\n\nCloses #<N>" \
+    --base $DEFAULT_BRANCH
+else
+  echo "gh CLI not available — push branch, user tạo PR manually"
+  echo "Branch: $(git branch --show-current)"
+  echo "Diff: $(git diff $DEFAULT_BRANCH --stat)"
+fi
 ```
 
 ### Step 8b: Release Lock & PR Review Feedback
@@ -432,9 +439,13 @@ Conventions, conflict resolution, module system → [references/conventions.md](
 
 ## Tools Required
 
-- `claude` CLI (v2.1.63+) — coding agent (xem setup tại Step 5.6)
-- `gh` CLI — GitHub operations
-- `cloudflared` — dev preview tunnels
-- `git` — version control
-- `typescript-language-server`, `pyright` — LSP servers cho code navigation (recommended)
-- `gitnexus` — code intelligence engine, MCP tools cho codebase awareness (recommended, xem `references/gitnexus-setup.md`)
+| Tool | Required? | Purpose |
+|------|-----------|---------|
+| `git` | **Bắt buộc** | Version control |
+| `claude` CLI | Recommended | Coding agent — nếu không có, agent tự code (Mode B) |
+| `gh` CLI | Optional | GitHub PR/issue — nếu không có, push branch + user tạo PR manual |
+| `cloudflared` | Optional | Dev preview tunnel |
+| `pinchtab` | Optional | Browser verification |
+| `gitnexus` | Optional | Code intelligence ([references/gitnexus-setup.md](references/gitnexus-setup.md)) |
+
+> Skill tự detect tool availability. Không có tool → graceful fallback, không crash.
