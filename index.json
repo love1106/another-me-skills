@@ -56,6 +56,25 @@
     "author_name": "khoidoan"
   },
   {
+    "slug": "am-planner-code-task",
+    "name": "Code Task Planner",
+    "description": "Plan and break down coding tasks — features, bug fixes, refactors, API changes. Analyzes codebase, clarifies requirements, defines acceptance criteria, test strategy, and implementation steps. Default output: GitHub issue. Supports Jira, Monday, Trello.",
+    "category": "developer",
+    "tags": [
+      "planning",
+      "coding",
+      "issue",
+      "task",
+      "github",
+      "acceptance-criteria",
+      "test-strategy",
+      "breakdown"
+    ],
+    "repo_path": "am-planner-code-task",
+    "version": "1.2.0",
+    "author_name": "khoidoan"
+  },
+  {
     "slug": "am-research-skill",
     "name": "Research Skill",
     "description": "Deep web search, scraping, browser automation, and information gathering with structured output. Handles static pages, SPAs, JS-rendered content, form interactions, and anti-bot bypasses via Playwright/Scrapling.",
