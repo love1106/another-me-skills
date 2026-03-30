@@ -33,7 +33,7 @@ cat .claude/instructions.md CLAUDE.md CODING.md CONVENTIONS.md 2>/dev/null
 git log --oneline -10
 ```
 
-## Common Patterns at Hubcom
+## Common Patterns
 
 ### Git
 - **Commits:** Conventional Commits (`feat:`, `fix:`, `chore:`, `refactor:`, `docs:`)

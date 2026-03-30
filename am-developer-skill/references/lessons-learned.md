@@ -1,7 +1,7 @@
 # Lessons Learned — Developer Skill
 
 **Skill-level** learnings — cách dùng skill, workflow insights, tool quirks.
-Khác với **annotations** (project-level gotchas lưu trong `memory/hc-developer-skill-annotations/<project>.jsonl`).
+Khác với **annotations** (project-level gotchas lưu trong `memory/am-developer-skill-annotations/<project>.jsonl`).
 
 - **Lessons Learned** = "spawn.sh cần setfacl" (áp dụng mọi project)
 - **Annotations** = "Orchestrator phải docker compose up --build" (project-specific)

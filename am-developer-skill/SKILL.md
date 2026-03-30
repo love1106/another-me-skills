@@ -1,13 +1,17 @@
 ---
 name: am-developer-skill
-version: 2.3.0
+version: 2.10.3
 author: khoidoan
 description: >
-  Developer workflow for ALL coding tasks: scout → plan → code → verify → PR.
-  Handles feature, bug fix, refactor, test, deploy config via Claude CLI or self-code.
-  Worktree-aware parallel sessions, verification pipeline, conventional commits.
-  Use when: any coding task. Triggers: build, fix, refactor, test, deploy, init project, security audit.
-  NOT for: edits under 3 lines (use edit), reading code (use read).
+  Developer workflow for ALL coding tasks. Handles: init project, security review, self-improve,
+  Claude Code CLI with retry, planning, GitHub tracking, branching, verification, PR creation.
+  CLI error tracking with auto-log and retrospect analysis.
+  Use when: init project, security audit, build feature, fix bug, refactor, code review, generate tests,
+  write unit tests, TDD, viết tests, deploy config, self-improve dev skill, retrospect, hồi tưởng,
+  review cli errors, xem lỗi cli, cli report, error report, analyze cli runs, phân tích lỗi,
+  code intelligence, index codebase, analyze architecture, blast radius,
+  code health, tech debt, audit codebase, tình hình code, what needs fixing.
+  NOT for: reading code (use read), edits under 3 lines (use edit), ACP requests (use sessions_spawn).
 ---
 
 # Another Me Developer Skill
@@ -49,44 +53,125 @@ Nếu chưa có repo → `git clone` vào `~/projects/` trước khi bắt đầ
 | Size | Scout | Flow |
 |------|-------|------|
 | **Quick** (≤3 files, isolated, no logic change) | locate only | `[1a] → 1 → 4 → 5 → 6 lite → 8` |
-| **Medium** (3-10 files, logic change) | full 5 bước | `1a → 1+1b → 2-3 → 4 → 5 → [5.10] → 6 full → 8` |
-| **Large** (>10 files, cross-module) | full 5 bước | `1a → 1+1b → 2-3+issue → 4 → 5 → [5.10] → 6 full → 8` |
-| **Hotfix** (prod emergency) | reproduce+locate | `1a → 1 → 4(tag) → 5 → 6 lite → push → [9]` |
-| **Greenfield** (100% new) | skip | `1+1b → 2-3 → 4 → 5 → [5.10] → 6 → 8` |
+| **Medium** (3-10 files, logic change) | full 5 bước | `1a → 1+1b → 2-3 → 4 → 5 → [5.10] → 6 full → 8 → 8b` |
+| **Large** (>10 files, cross-module) | full 5 bước | `1a → 1+1b → 2-3+issue → 4 → 5 → [5.10] → 6 full → 8 → 8b → [9]` |
+| **Hotfix** (prod emergency) | reproduce+locate | `1a → 1 → 4(tag) → 5 → 6 lite → push → 8b → 9` |
+| **Greenfield** (100% new) | skip | `1+1b → 2-3 → 4 → 5 → [5.10] → 6 → 8 → 8b` |
 
 `[brackets]` = optional. Mọi flow kết thúc bằng Step 8b (release lock).
 
+## Workflow Cheat Sheet
+
+```
+⚠️ LUÔN check Step 0 trước — nếu match special task → đi theo reference riêng.
+
+Quick:      [1a gọn] → 1 (gọn) ────────────→ 4 → 5 → 6 lite → 8 → 8b
+Medium:     1a → 1+1b → 2-3 (plan) ──────→ 4 → 5 → [5.10] → 6 full → [7] → 8 → 8b → [9]
+Large:      1a → 1+1b → 2-3 (plan+issue) → 4 → 5 → [5.10] → 6 full → [7] → 8 → 8b → [9]
+Hotfix:     1a (quick) → 1 (gọn) ──────────→ 4 (from tag) → 5 → 6 lite → push → 8b → 9
+Greenfield: Skip 1a → 1+1b → 2-3 → 4 → 5 → [5.10] → 6 → 8 → 8b
+```
+
 ## Workflow (follow strictly in order)
 
-### Step 0: Route & Tools
+### Step 0: Route by Task Type
 
-**Special task types** — đọc reference tương ứng trước khi vào workflow:
-Init project → `references/init-project.md` | Unit tests/TDD → `references/unit-testing.md` | Security review → `references/security-review.md` | Self-improve → `references/self-improve.md`
+Một số task có workflow riêng — check trước khi vào workflow chính:
 
-**Optional tools** (dùng trong Scout nếu có):
-- **Retrospect:** `python3 <skill_dir>/scripts/retrospect.py [--days 7]` — CLI error patterns
-- **GitNexus:** `node <skill_dir>/scripts/git-nexus-mcp-bridge.js query/impact` — code search + blast radius
+| Task | Reference | Ghi chú |
+|------|-----------|---------|
+| Init project mới từ template | `references/init-project.md` | Xong → quay lại workflow này cho dev tiếp |
+| Viết unit tests / TDD | `references/unit-testing.md` | TDD flow, spec-first, gap discovery |
+| Security review / audit code | `references/security-review.md` | Script: `scripts/security-review.sh` |
+| Code health / tech debt audit | `references/code-health.md` | Scan → report → tạo issues (user confirm) |
+| Self-improve / tự đánh giá skill | `references/self-improve.md` | Chỉ khi user yêu cầu, KHÔNG tự trigger |
+| Retrospect / review CLI errors | `scripts/retrospect.py` | Xem bên dưới: Step 0b |
 
-Không match special type → Step 1a (Scout).
+Nếu không match → resolve project rồi tiếp Step 1a.
+
+**Resolve project (trước Step 1a):**
+1. Check conversation context — user đề cập repo/project nào?
+2. Check cwd: `git remote get-url origin 2>/dev/null`
+3. Nếu vẫn unclear → hỏi: "Task này cho project nào?"
+4. `cd ~/projects/<repo>` trước khi bắt đầu Scout.
+
+### Step 0b: CLI Retrospect (Error Tracking)
+
+**Trigger:** "retrospect", "hồi tưởng", "review cli errors", "xem lỗi cli", "cli report"
+
+```bash
+python3 <skill_dir>/scripts/retrospect.py [--days 7] [--project <name>] [--all] [--trim-only]
+```
+Output: success/fail rates, error patterns, improvement suggestions. Review → update lessons learned.
+
+### Step 0c: GitNexus Code Intelligence (Optional)
+
+**Dùng trong Step 1a (Scout) bước 2+4** — nếu repo đã index và tool available.
+
+```bash
+command -v gitnexus >/dev/null 2>&1 || { echo "Skip — not installed"; }
+BRIDGE="<skill_dir>/scripts/git-nexus-mcp-bridge.js"
+node $BRIDGE query '{"query":"<search>"}' --repo <name>    # Scout bước 2: Locate
+node $BRIDGE impact '{"target":"<function>"}' --repo <name> # Scout bước 4: Blast Radius
+```
+
+Chi tiết: [references/gitnexus-setup.md](references/gitnexus-setup.md)
+
+### Pre-flight Check (chạy 1 lần đầu session, skip nếu đã check)
+
+```bash
+command -v git >/dev/null 2>&1 || echo "❌ git not found"
+command -v gh >/dev/null 2>&1 || echo "⚠️ gh not found — PR creation sẽ fail"
+command -v claude >/dev/null 2>&1 || echo "⚠️ claude CLI not found — Step 5 sẽ dùng Mode B (self-code)"
+```
+
+Nếu `git` missing → BLOCKED. Nếu `gh` hoặc `claude` missing → warn, tiếp nếu task không cần.
 
 ### Step 1a: Scout — Investigate Before You Plan
 
-**BẮT BUỘC cho bug fixes + tasks cần hiểu existing code.** Skip: greenfield, docs, config.
+**BẮT BUỘC cho bug fixes và tasks cần hiểu existing code.** Skip cho: greenfield features (code mới hoàn toàn), docs, config changes.
 
-5 bước (Quick tasks chỉ cần 1-2):
+**Mục đích:** Hiểu root cause từ CODE THẬT trước khi đề xuất solution. Không đoán.
 
-1. **Reproduce** — verify bug, điều kiện trigger (curl, browser, logs)
-2. **Locate** — grep keywords, `git log -10 -- <file>`, GitNexus query (nếu có)
-3. **Root Cause** — đọc code, trace data flow. Ghi: "Bug ở file X, dòng Y, vì Z"
-4. **Blast Radius** — ai gọi function này? grep callers, GitNexus impact
-5. **Evidence** — log/stack trace, screenshot, commit hash (nếu regression)
+**5 bước scout:**
 
-**Output** (trình bày ở Step 1):
+1. **Reproduce** — Verify bug có thật không, điều kiện trigger
+   ```bash
+   curl -s http://localhost:3000/api/... | jq .
+   ```
+
+2. **Locate** — Tìm code liên quan
+   ```bash
+   cd "$WORKDIR"
+   grep -rn "functionName\|errorMessage" src/ --include="*.ts" --include="*.tsx" | head -20
+   git log --oneline -10 -- src/path/to/suspected/file.ts
+   ```
+
+3. **Root Cause** — Đọc code, trace data flow. Ghi: "Bug ở file X, dòng Y, vì Z"
+
+4. **Blast Radius** — Fix chỗ này ảnh hưởng gì
+   ```bash
+   grep -rn "importedFunction\|<Component" src/ --include="*.ts" --include="*.tsx" | head -20
+   ```
+
+5. **Evidence** — Log/stack trace, screenshot, commit hash (nếu regression)
+
+**Output scout** (trình bày cho user ở Step 1):
 ```
 🔍 Scout: Reproduce [✅/❌] | Location [file:line] | Root cause [mô tả] | Blast radius [N callers] | Evidence [proof]
 ```
 
-⚠️ Scout = đọc + trace. KHÔNG sửa code.
+**Quick tasks:** Scout gọn — chỉ locate + đọc nhanh. Không cần full 5 bước.
+
+**⚠️ Scout ≠ Fix.** Scout chỉ đọc + trace. KHÔNG sửa code ở bước này.
+
+**Iron Law:** Không có fix nào được phép trước khi có investigation. Document hypothesis TRƯỚC khi attempt fix:
+```
+Hypothesis: {mô tả nguyên nhân suspected}
+Evidence: {data từ scout}
+Fix approach: {plan cụ thể nếu hypothesis đúng}
+```
+Nếu 3 fix attempts thất bại → STOP, re-investigate (hypothesis sai?), escalate (dùng BLOCKED status).
 
 ---
 
@@ -145,11 +230,23 @@ source <skill_dir>/scripts/detect-env.sh
   git checkout -b "$BRANCH_NAME" 2>/dev/null || git checkout "$BRANCH_NAME"
 }
 
-$PM install  # bắt buộc — worktree không share node_modules
+# Install deps (stack-aware)
+[ -f package.json ] && $PM install
+[ -f requirements.txt ] && pip install -r requirements.txt 2>/dev/null
+[ -f go.mod ] && go mod download 2>/dev/null
 echo "$WORKDIR" > /tmp/openclaw-workdir-$$.txt  # save cho Step 5, 6, 8
 ```
 
-**Hotfix:** `worktree.sh acquire` + `git reset --hard $(git describe --tags --abbrev=0)`. Skip Step 2-3.
+**Hotfix:** `worktree.sh acquire` + reset to stable point:
+```bash
+TAG=$(git describe --tags --abbrev=0 2>/dev/null)
+if [ -n "$TAG" ]; then
+  git reset --hard "$TAG"
+else
+  git reset --hard "origin/$DEFAULT_BRANCH"
+fi
+```
+Skip Step 2-3.
 **Status:** `bash <skill_dir>/scripts/worktree.sh status ~/projects/<repo>`
 
 ### Step 5: Implement Code
@@ -162,12 +259,18 @@ Chi tiết: [references/claude-cli-guide.md](references/claude-cli-guide.md)
 
 ```bash
 bash <skill_dir>/scripts/spawn.sh <WORKDIR> <MODEL> "YOUR PROMPT"
-# Timeout default 180s. Exit 124 = timed out → chia nhỏ hơn
+# Resume: bash <skill_dir>/scripts/spawn.sh <WORKDIR> <MODEL> "continue..." <SESSION_UUID>
+# Custom timeout (default 240s): bash <skill_dir>/scripts/spawn.sh <WORKDIR> <MODEL> "PROMPT" "" 120
 ```
+⏱️ **Timeout:** Default 240s. Exit code 124 = timed out → chia subtask nhỏ hơn (Hard Rule #5).
 
-Inject vào prompt: scout findings → coding rules → annotations → `"DO NOT git commit or push."`
+**Inject vào prompt** (theo thứ tự):
+1. **Scout findings** (Step 1a) — root cause, file:line, blast radius
+2. **Coding rules** ([references/coding-rules.md](references/coding-rules.md)) — 10 defensive programming rules
+3. **Annotations** (nếu có) — project-specific gotchas
+4. Cuối prompt: `"DO NOT git commit or push."`
 
-Sau spawn: parse `is_error` → retry max 3 → log (`scripts/log-cli-run.sh`) → report user.
+Sau spawn: parse `is_error` → retry max 3 (mỗi lần khác strategy) → log (`scripts/log-cli-run.sh`) → report user.
 
 #### Mode B: Self-code (Claude CLI không có)
 
@@ -213,6 +316,7 @@ command -v pinchtab &>/dev/null && {
 
 Sau build pass, TRƯỚC khi declare done:
 
+**A. Structural Review (mọi task):**
 1. **Scope drift** — `git diff $DEFAULT_BRANCH --name-only` vs Step 2-3 plan. File ngoài scope → revert hoặc justify
 2. **Read diff** — `git diff --stat` + `git diff`, hiểu mọi thay đổi
 3. **Acceptance criteria** — check từng cái ✅/❌ từ Step 1
@@ -220,7 +324,31 @@ Sau build pass, TRƯỚC khi declare done:
 5. **Edge cases** — null/empty/error states xử lý chưa?
 6. **Side effects** — có phá gì ngoài ý muốn?
 
+**B. Safety Checklist (Medium+ tasks):**
+```
+- [ ] SQL: parameterized queries? migration có rollback?
+- [ ] Auth: new endpoints có auth check? existing auth không bị bypass?
+- [ ] Side effects: conditional logic khác nhau prod/dev? (env checks, feature flags)
+- [ ] Error handling: new error paths có user-facing message? Không leak stack trace?
+- [ ] Completeness: tất cả TODO/FIXME resolved? Không có stub/placeholder?
+- [ ] Secrets: không hardcode API key, token, password trong code?
+```
+Quick tasks: skip Safety Checklist. Chỉ chạy Structural Review.
+
 ⚠️ Build pass ≠ done. FAIL → fix → chạy lại pipeline. **KHÔNG tạo PR khi còn FAIL.**
+
+#### Completion Status Protocol (báo kết quả cho user)
+
+Sau verification pipeline, report status bằng 1 trong 4 format:
+
+| Status | Khi nào | Format |
+|---|---|---|
+| **DONE** | Mọi step pass, evidence đầy đủ | `✅ DONE: {mô tả} — PR: {link}` |
+| **DONE_WITH_CONCERNS** | Pass nhưng có issues cần flag | `⚠️ DONE_WITH_CONCERNS: {mô tả} — Concerns: {list}` |
+| **BLOCKED** | Không thể tiếp tục | `🚫 BLOCKED: {lý do} — Tried: {gì đã thử} — Need: {cần gì}` |
+| **NEEDS_CONTEXT** | Thiếu info để tiếp | `❓ NEEDS_CONTEXT: {cần gì cụ thể}` |
+
+**Rule:** Sau 3 retry thất bại (Hard Rule #2) → BẮT BUỘC dùng BLOCKED format.
 
 ### Step 7: Dev Preview (Optional)
 
@@ -256,11 +384,6 @@ rm -f /tmp/openclaw-workdir-$$.txt
 ⚠️ Không cleanup worktree khi PR chưa merged — reviewer có thể request changes.
 
 **PR Review Feedback:** Re-acquire → fix (Claude CLI) → verify (Step 6) → push → release.
-```bash
-WORKDIR=$(bash <skill_dir>/scripts/worktree.sh acquire "$REPO_ROOT" "$BRANCH_NAME")
-cd "$WORKDIR"
-# Fix → verify → commit → push → release
-```
 
 ### Step 9: Post-Merge Deploy (Optional)
 
@@ -275,7 +398,6 @@ cd "$WORKDIR"
 | CF Pages | Auto-deploy on push |
 
 ⚠️ Confirm user trước khi deploy prod (Reversibility 🟡/🔴).
-💡 Deploy method: check `MEMORY.md`, project README, hoặc hỏi user → ghi annotation.
 
 ### Conventional Commits (BẮT BUỘC)
 
@@ -285,13 +407,16 @@ Chi tiết tại [references/conventions.md](references/conventions.md). Format:
 
 Full history: [references/lessons-learned.md](references/lessons-learned.md)
 
-| # | Lesson |
-|---|--------|
-| 1 | **Scout trước Plan** — đọc code thật trước khi đề xuất. Đoán mò = sai approach |
-| 2 | **Scope drift** — self-review PHẢI check `git diff --name-only` vs plan. File ngoài scope → revert |
-| 3 | **Chunk tasks** — 1 prompt lớn chạy 10 phút = user chờ mù. Chia ~1-2 phút, report sau mỗi cái |
-| 4 | **Build pass ≠ done** — PHẢI self-review logic + trace data flow + check edge cases |
-| 5 | **Tool check first** — `command -v` trước khi dùng. Crash vì thiếu tool = bug dễ tránh |
+| # | Lesson | Date |
+|---|--------|------|
+| 14 | **spawn.sh cần timeout** — default 240s, exit 124 = timed out. Chia task nhỏ hơn, không tăng timeout | 2026-03-25 |
+| 15 | **Scope drift = silent bug** — Claude CLI sửa file ngoài scope. Self-review check `git diff --name-only` vs plan | 2026-03-25 |
+| 16 | **Deploy = separate step** — Step 9 detect + chạy deploy method. Confirm user trước prod | 2026-03-25 |
+| 17 | **Scout trước Plan** — discuss approach chưa đọc code = đoán mò. Step 1a bắt buộc | 2026-03-25 |
+| 18 | **Auto-log > Manual-log** — Hook vào spawn.sh exit trap. Manual log = luôn bị skip | 2026-03-29 |
+| 19 | **Timeout 240s cho TS projects** — 180s quá ngắn cho TypeScript projects trung bình | 2026-03-29 |
+| 20 | **Safety Checklist catches real bugs** — SQL injection, missing auth, env-conditional logic = top 3 issues | 2026-03-29 |
+| 21 | **Completion Protocol > free-form** — DONE/BLOCKED/NEEDS_CONTEXT format giúp user scan nhanh | 2026-03-29 |
 
 ## References & Tools
 

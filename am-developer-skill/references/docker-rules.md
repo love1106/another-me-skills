@@ -66,8 +66,8 @@ Default: bind to `127.0.0.1` unless external access is needed.
 ### 6. Always label containers
 ```yaml
 labels:
-  - "com.hubcom.app={app_name}"
-  - "com.hubcom.managed-by=hip"
+  - "com.app={app_name}"
+  - "com.managed-by=agent"
 ```
 
 ### 7. Network isolation

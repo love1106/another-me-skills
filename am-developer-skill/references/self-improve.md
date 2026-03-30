@@ -28,7 +28,7 @@ Skill này không cải tiến **code** — nó cải tiến **skill workflow**.
 [APPLY] — Chỉ apply những gì đã confirm
       │
       ▼
-[PUSH] — hc-push-skills → GitHub
+[PUSH] — Push updated skill → GitHub
 ```
 
 **Nguyên tắc:**
@@ -63,7 +63,7 @@ ls -la /tmp/claude-*.log 2>/dev/null
 grep -l "developer\|coding\|Claude CLI\|spawn\|retry\|build\|PR" ~/. openclaw/workspace/memory/*.md 2>/dev/null
 
 # 4. Skill's own Lessons Learned section
-grep -A 50 "## Lessons Learned" ~/.openclaw/workspace/skills/hc-developer-skill/SKILL.md
+grep -A 50 "## Lessons Learned" <skill_dir>/SKILL.md
 ```
 
 ### Signals to Extract
@@ -148,12 +148,56 @@ Action: Đề xuất tăng Quick timeout → 180s cho TS projects
 
 **Bước quan trọng nhất. Không skip.**
 
-### Present Findings
+### Present Findings — Retro Dashboard (gstack /retro inspired)
+
+Mỗi lần self-improve, generate retro dashboard TRƯỚC findings:
 
 ```
-📊 Developer Skill Self-Improve
+📊 Developer Skill Retro — {date range}
 
-Data từ: {N} projects | {N} PRs | period {date range}
+### Shipping Stats
+| Project | PRs | Commits | +Lines | -Lines | Median PR Time |
+|---------|-----|---------|--------|--------|----------------|
+| {repo}  | {n} | {n}     | {n}    | {n}    | {n} min        |
+
+### Test Health
+| Project | Tests Before | Tests After | Coverage Δ |
+|---------|-------------|-------------|------------|
+| {repo}  | {n}         | {n}         | {+/-n%}    |
+
+### CLI Health (from retrospect.py)
+| Total Runs | Success | Fail | Avg Duration | Top Errors |
+|-----------|---------|------|-------------|------------|
+| {n}       | {n}     | {n}  | {n}s        | {list}     |
+
+### 🔥 Shipping Streak: {N} consecutive days with merged PR
+```
+
+**Data collection:**
+```bash
+# Shipping stats — iterate all repos
+for repo in ~/projects/*/; do
+  [ -d "$repo/.git" ] || continue
+  REMOTE=$(git -C "$repo" remote get-url origin 2>/dev/null | sed 's|.*github.com[:/]||;s|\.git$||')
+  [ -z "$REMOTE" ] && continue
+  echo "=== $(basename $repo) ==="
+  gh pr list --repo "$REMOTE" --state merged --limit 50 --json number,additions,deletions,createdAt,mergedAt
+  git -C "$repo" log --oneline --since="7 days ago" | wc -l
+done
+
+# Test health — check test count changes
+git diff main --stat -- "*.test.*" "*.spec.*"
+
+# CLI health — from retrospect.py
+python3 <skill_dir>/scripts/retrospect.py --days 7 --all --json 2>/dev/null
+```
+
+**Trend tracking:** Save retro output to `memory/retro-{YYYY-MM-DD}.md`. Future retros compare week-over-week.
+
+Sau dashboard, present findings:
+
+```
+📊 Skill Analysis
 
 ✅ Confirmed working (nên hardcode):
 1. {finding + evidence}
@@ -205,7 +249,7 @@ Mỗi item, user quyết định:
 
 ## Phase 5: PUSH — GitHub Sync
 
-Dùng `hc-push-skills` workflow. Commit message:
+Push updated skill to the skills repo. Commit message:
 
 ```
 feat(self-improve): developer skill update from {YYYY-MM} data

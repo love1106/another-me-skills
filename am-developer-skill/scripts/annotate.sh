@@ -30,7 +30,7 @@
 
 set -euo pipefail
 
-ANNOTATIONS_DIR="${HOME}/.openclaw/workspace/memory/hc-developer-skill-annotations"
+ANNOTATIONS_DIR="${HOME}/.openclaw/workspace/memory/am-developer-skill-annotations"
 mkdir -p "$ANNOTATIONS_DIR"
 
 # --- Helpers ---

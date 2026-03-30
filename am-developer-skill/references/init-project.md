@@ -4,7 +4,7 @@ Tạo project mới từ template có sẵn trong `initial-template-workspace`.
 
 ## Template Repository
 
-- **Repo:** `https://github.com/hubcom-tech/initial-template-workspace.git`
+- **Repo:** Template repo configured per organization (check `TOOLS.md` or ask user)
 - **Local cache:** `~/projects/initial-template-workspace`
 - **Projects dir:** `~/projects/`
 
@@ -18,7 +18,7 @@ Tạo project mới từ template có sẵn trong `initial-template-workspace`.
 1. **GitHub repo link** — Repo đã tạo chưa?
    - Nếu có: dùng link đó
    - Nếu chưa: tạo mới, tên **bắt buộc** có postfix `-workspace` (vd: `myshop-workspace`)
-   - Org mặc định: `hubcom-tech`
+   - Org: check `TOOLS.md` for default GitHub org
 
 **Nhóm 2 — Project info (để match template):**
 2. **Project name** — Tên project/thương hiệu (vd: "MyShop", "CafeXyz")
@@ -37,7 +37,7 @@ Tạo project mới từ template có sẵn trong `initial-template-workspace`.
 ```bash
 # Clone nếu chưa có (shallow — repo có thể rất lớn với nhiều templates)
 if [ ! -d ~/projects/initial-template-workspace ]; then
-  git clone --depth 1 https://github.com/hubcom-tech/initial-template-workspace.git ~/projects/initial-template-workspace
+  git clone --depth 1 <TEMPLATE_REPO_URL> ~/projects/initial-template-workspace
 fi
 cd ~/projects/initial-template-workspace
 git pull origin main
@@ -82,7 +82,7 @@ Nếu repo đã có code → **warn user**, hỏi có muốn overwrite không.
 **Nếu user chưa có repo:**
 ```bash
 PROJECT_NAME="myshop-workspace"  # Must end with -workspace
-ORG="hubcom-tech"
+ORG="${GITHUB_ORG:-$(grep -oP 'Org:\s*\K\S+' ~/.openclaw/workspace/TOOLS.md 2>/dev/null || echo 'my-org')}"
 
 cd ~/projects
 gh repo create "$ORG/$PROJECT_NAME" --private --clone --description "Project description"
@@ -110,7 +110,7 @@ rsync -a \
 cd ~/projects/$PROJECT_NAME
 # Đọc TOOLS.md cho git user info, fallback to defaults
 GIT_USER=$(grep -oP 'Username:\s*\K\S+' ~/.openclaw/workspace/TOOLS.md 2>/dev/null || echo "dinh_cp")
-GIT_EMAIL=$(grep -oP 'Email:\s*\K\S+' ~/.openclaw/workspace/TOOLS.md 2>/dev/null || echo "dinh_cp@hubcom.tech")
+GIT_EMAIL=$(grep -oP 'Email:\s*\K\S+' ~/.openclaw/workspace/TOOLS.md 2>/dev/null || git config user.email || echo "user@example.com")
 git config user.name "$GIT_USER"
 git config user.email "$GIT_EMAIL"
 
@@ -164,7 +164,7 @@ Báo user:
 - 📦 Template: `$TEMPLATE`
 - 🔗 GitHub: `<repo-url>`
 - 🐳 Docker: `docker build -t $PROJECT_NAME .`
-- 🔧 Tiếp theo: dùng `hc-developer-skill` để phát triển features
+- 🔧 Tiếp theo: dùng `am-developer-skill` để phát triển features
 
 ## Available Templates
 

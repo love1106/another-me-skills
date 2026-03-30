@@ -79,7 +79,7 @@ Opinionated recommendations. Chọn dựa trên: ecosystem maturity, DX, perform
 
 | Nhu cầu | Recommend | Alternatives |
 |---------|-----------|-------------|
-| Auth (Hubcom stack) | **auth-cloud-flare-workspace** — multi-tenant OAuth 2.0 + OIDC, Cloudflare Workers + D1 + KV | — |
+| Auth (Project stack) | **auth-cloud-flare-workspace** — multi-tenant OAuth 2.0 + OIDC, Cloudflare Workers + D1 + KV | — |
 | Auth (managed) | **Clerk** | Auth0, Supabase Auth |
 | Auth (self-hosted, other) | **Auth.js v5** / **Better Auth** | Passport.js (legacy) |
 | JWT | **jose** (Edge-compatible) | jsonwebtoken |
@@ -88,9 +88,9 @@ Opinionated recommendations. Chọn dựa trên: ecosystem maturity, DX, perform
 | Input validation | **Zod** | Joi, Yup |
 | CORS | Built-in framework support | cors package |
 
-### Auth Integration — Hubcom Identity Server
+### Auth Integration — Identity Server
 
-Reference repo: [hubcom-tech/auth-cloud-flare-workspace](https://github.com/hubcom-tech/auth-cloud-flare-workspace)
+Reference repo: [your-org/auth-cloud-flare-workspace](https://github.com/your-org/auth-cloud-flare-workspace)
 
 **Stack:** Hono + jose + Zod + Cloudflare D1 + KV
 
@@ -269,7 +269,7 @@ Swagger UI: /docs
 
 | Use case | Stack |
 |----------|-------|
-| **SaaS MVP** | Next.js (full-stack: SSR + API Routes) + Drizzle + PostgreSQL + Vercel. Auth: Clerk (nhanh) hoặc Hubcom auth (self-hosted). Tách NestJS chỉ khi cần |
+| **SaaS MVP** | Next.js (full-stack: SSR + API Routes) + Drizzle + PostgreSQL + Vercel. Auth: Clerk (nhanh) hoặc custom auth (self-hosted). Tách NestJS chỉ khi cần |
 | **E-commerce** | Next.js + Medusa.js (headless) hoặc Shopify Storefront API + NestJS |
 | **Brochure/Giới thiệu** (nhà hàng, salon, portfolio...) | Astro + Tailwind + Cloudflare Pages — static, fast, free hosting |
 | **Blog/Content** | Astro + MDX + Cloudflare Pages |
