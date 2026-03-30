@@ -3,6 +3,14 @@
 ## GitHub Issue (Default)
 
 ```markdown
+## Decision Context
+- **Demand:** {signal thật hoặc assumption — ghi evidence nếu có}
+- **Narrowest Wedge:** {phiên bản nhỏ nhất ship được}
+- **Top Risk:** {giả định nguy hiểm nhất}
+- **Scope Mode:** {Expand / Selective Expand / Hold Scope / Reduce}
+
+> ℹ️ Section này chỉ xuất hiện khi Step 0 Challenge được chạy (feature mới, M+ size). Xóa nếu không applicable.
+
 ## Mô tả
 {1-3 câu context + expected result}
 

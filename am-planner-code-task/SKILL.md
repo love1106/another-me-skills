@@ -1,6 +1,6 @@
 ---
 name: am-planner-code-task
-version: 1.2.0
+version: 1.6.1
 author: khoidoan
 description: >
   Plan and break down CODING tasks — features, bug fixes, refactors, API changes,
@@ -56,7 +56,7 @@ Turn vague requirements into actionable, well-structured development tasks.
 - Risk 🟢 Low
 
 → **Quick flow:**
-1. **Step 0** — conversation context
+1. **Step 0.5** — conversation context (skip Step 0 Challenge)
 2. **Step 1** — understand & clarify (manual discovery only, skip GitNexus). Skip questions if enough context.
 3. **Step 3** — compact AC (3-5 items), skip category grouping
 4. **Step 4** — list files affected + 1-line approach each. No sub-steps.
@@ -75,7 +75,64 @@ Turn vague requirements into actionable, well-structured development tasks.
 
 ## Full Workflow
 
-### Step 0: Gather Conversation Context
+### Step 0: Challenge Scope (gstack-inspired)
+
+**Purpose:** Challenge assumptions before planning. Avoid building the wrong thing.
+
+**Auto-skip when:**
+- Task is bug fix, typo, config change, rename
+- User says "skip challenge" or "plan luôn"
+- Quick Mode (size S)
+- Update/Split mode (task already planned)
+
+**Trigger when (BOTH required):**
+1. Keyword present: "feature", "tính năng mới", "build", "tạo mới", "redesign", "rewrite"
+2. AND effort estimate ≥ M size (or unclear size — vague scope)
+
+If keyword present but task is clearly small (add 1 field, 1 simple endpoint) → skip.
+
+**3 Forcing Questions:**
+
+1. **Demand** — "Who needs this now? Is there real signal (user feedback, data, blocker) or just assumption?"
+   - If assumption only → flag in issue: "⚠️ Assumption-driven, demand not validated"
+   - If real signal → record evidence in issue context
+
+2. **Narrowest Wedge** — "What's the smallest version we can ship that still delivers value?"
+   - Compare: user request vs narrowest wedge
+   - If different → present both options
+
+3. **Risk** — "What's the most dangerous assumption in this plan? What if it's wrong?"
+   - Example: "Assumes users understand dual wallet" → if wrong → wasted effort
+   - Record top risk in issue "## Decision Context"
+
+**Scope Mode (ask after 3 questions):**
+
+| Mode | When | Agent action |
+|---|---|---|
+| **Expand** | User wants to explore more | Surface opportunities, recommend enthusiastically |
+| **Selective Expand** | User wants baseline + cherry-pick | Show additions one by one |
+| **Hold Scope** | User is clear, wants to plan now | Skip expansion, maximum rigor on current scope |
+| **Reduce** | User wants to ship fast | Find minimum viable version, cut non-essential |
+
+Default: **Hold Scope** (don't ask if user is already clear).
+Only ask scope mode when questions reveal unclear scope or tension between ambition vs effort.
+
+**Output:** "Decision Context" section in issue:
+```markdown
+## Decision Context
+- **Demand:** {signal or assumption}
+- **Narrowest Wedge:** {smallest shippable version}
+- **Top Risk:** {most dangerous assumption}
+- **Scope Mode:** {chosen mode}
+```
+
+**Question budget:** Step 0 uses max 3 questions. Step 1 has max 2 remaining. Total ≤ 5 questions before planning.
+
+→ Continue to Step 0.5 (Gather Conversation Context)
+
+---
+
+### Step 0.5: Gather Conversation Context
 
 Before anything, extract from the current conversation:
 - What user already described about the feature/change
@@ -153,8 +210,8 @@ Don't hardcode paths — discover them.
 
 **Rules:**
 - Read source code BEFORE asking — self-answer as much as possible
-- Max 3-5 questions, batched in one message
-- Use conversation context (Step 0) — don't re-ask known info
+- Max 3-5 questions, batched in one message (if Step 0 Challenge ran → max 2 questions here, total ≤ 5)
+- Use conversation context (Step 0.5) — don't re-ask known info
 - If enough context → skip questions, confirm understanding and proceed
 
 ### Step 2: Analyze Impact & Risk
@@ -293,6 +350,7 @@ fi
 - No `gh` → remind user to check manually, then proceed
 
 **Read template:** Load `references/issue-templates.md` for structure + labeling + sizing.
+If Step 0 Challenge ran → include "Decision Context" section at top of issue body (before Mô tả). If Step 0 skipped → omit section.
 
 **Platform routing:**
 
