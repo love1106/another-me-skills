@@ -2,7 +2,7 @@
   {
     "slug": "am-developer-skill",
     "name": "Developer Skill",
-    "description": "Developer workflow for ALL coding tasks. Handles: init project, security review, Claude Code CLI with retry, planning, GitHub tracking, branching, verification, PR creation. CLI error tracking with auto-log and retrospect analysis.",
+    "description": "Developer workflow for ALL coding tasks. Handles: init project, security review, Claude Code CLI with retry, planning, GitHub tracking, branching, verification, PR creation. CLI error tracking with auto-log and retrospect analysis. Code health audit.",
     "category": "developer",
     "tags": [
       "coding",
@@ -16,7 +16,7 @@
       "testing"
     ],
     "repo_path": "am-developer-skill",
-    "version": "2.3.0",
+    "version": "2.10.3",
     "author_name": "khoidoan"
   },
   {
