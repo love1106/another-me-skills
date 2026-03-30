@@ -15,7 +15,7 @@ bash <skill_dir>/scripts/spawn.sh <WORKDIR> <MODEL> "continue..." <SESSION_UUID>
 # With custom timeout (default 180s):
 bash <skill_dir>/scripts/spawn.sh <WORKDIR> <MODEL> "YOUR PROMPT" "" 120
 ```
-`<skill_dir>` = directory containing SKILL.md (e.g. `~/.openclaw/workspace/skills/hc-developer-skill/`)
+`<skill_dir>` = directory containing SKILL.md (e.g. the skill's own directory)
 
 **Timeout:** Default 180s. Exit code 124 = timed out → task quá lớn, cần chia nhỏ (Hard Rule #5).
 

@@ -1,20 +1,47 @@
 #!/bin/bash
-# hc-developer-skill — Claude Code CLI spawn wrapper
+# am-developer-skill — Claude Code CLI spawn wrapper
 # Usage: spawn.sh <workdir> <model> <prompt> [session_id] [timeout_seconds]
 # Outputs: JSON result from Claude Code CLI
 # Exit 0 = success, 1 = error (including timeout at exit code 124)
 #
 # Prerequisites:
-# - A non-root user that can run claude CLI (bypassPermissions blocked for root)
-#   Set CLAUDE_USER env var or defaults to "coder"
+# - Claude CLI installed and accessible
+# - If running as root: set CLAUDE_USER env var (bypassPermissions blocked for root)
 # - ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL env vars
 
 WORKDIR="${1:-.}"
 MODEL="${2:-sonnet}"
 PROMPT="$3"
 SESSION_ID="${4:-}"  # optional: resume session
-TIMEOUT="${5:-180}"  # optional: timeout in seconds (default 180s = 3min)
-CLAUDE_USER="${CLAUDE_USER:-coder}"
+TIMEOUT="${5:-240}"  # optional: timeout in seconds (default 240s = 4min)
+
+# --- Auto-log on exit ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SPAWN_START=$(date +%s)
+_auto_log_cli_run() {
+  local end_ts=$(date +%s)
+  local duration=$(( end_ts - SPAWN_START ))
+  local log_exit_code="${SPAWN_EXIT_CODE:-1}"
+  local log_error_summary="${SPAWN_ERROR_SUMMARY:-}"
+  local log_session_id="${SPAWN_SESSION_ID:-$SESSION_ID}"
+  local log_cost="${SPAWN_COST:-0}"
+  local project_name
+  project_name=$(basename "$WORKDIR" 2>/dev/null || echo "unknown")
+  local task_summary
+  task_summary=$(echo "$PROMPT" | head -c 200)
+
+  bash "${SCRIPT_DIR}/log-cli-run.sh" \
+    --project "$project_name" \
+    --task "$task_summary" \
+    --model "$MODEL" \
+    --exit-code "$log_exit_code" \
+    --error-summary "$log_error_summary" \
+    --duration "$duration" \
+    --cost "$log_cost" \
+    --session-id "$log_session_id" \
+    2>/dev/null || true
+}
+trap '_auto_log_cli_run' EXIT
 
 if [ -z "$PROMPT" ]; then
   echo '{"type":"error","is_error":true,"result":"Missing prompt argument"}'
@@ -49,22 +76,37 @@ if [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-# Verify user exists
-if ! id "$CLAUDE_USER" &>/dev/null; then
-  echo "{\"type\":\"error\",\"is_error\":true,\"result\":\"User ${CLAUDE_USER} does not exist. Set CLAUDE_USER env var.\"}"
-  exit 1
+# Determine execution mode: direct or su to another user
+# Root can't run claude CLI with bypassPermissions — need CLAUDE_USER
+RUN_AS_USER=""
+if [ "$(id -u)" = "0" ]; then
+  CLAUDE_USER="${CLAUDE_USER:-coder}"
+  if id "$CLAUDE_USER" &>/dev/null; then
+    RUN_AS_USER="$CLAUDE_USER"
+  else
+    echo "{\"type\":\"error\",\"is_error\":true,\"result\":\"Running as root but CLAUDE_USER='${CLAUDE_USER}' does not exist. Create user or set CLAUDE_USER env var.\"}"
+    exit 1
+  fi
 fi
 
 # Find claude binary
-CLAUDE_BIN=$(which claude 2>/dev/null || echo "/usr/local/bin/claude")
-if [ ! -x "$CLAUDE_BIN" ]; then
-  echo '{"type":"error","is_error":true,"result":"claude CLI not found"}'
-  exit 1
+if [ -n "$RUN_AS_USER" ]; then
+  CLAUDE_BIN=$(su - "$RUN_AS_USER" -s /bin/bash -c "which claude 2>/dev/null" || echo "/usr/local/bin/claude")
+  if [ -z "$CLAUDE_BIN" ] || ! su - "$RUN_AS_USER" -s /bin/bash -c "[ -x '$CLAUDE_BIN' ]" 2>/dev/null; then
+    echo '{"type":"error","is_error":true,"result":"claude CLI not found for user '"$RUN_AS_USER"'"}'
+    exit 1
+  fi
+else
+  CLAUDE_BIN=$(which claude 2>/dev/null || echo "/usr/local/bin/claude")
+  if [ ! -x "$CLAUDE_BIN" ]; then
+    echo '{"type":"error","is_error":true,"result":"claude CLI not found"}'
+    exit 1
+  fi
 fi
 
-# Ensure coder user can access and write to workdir
-if [ -d "$WORKDIR" ]; then
-  setfacl -R -m u:${CLAUDE_USER}:rwX "$WORKDIR" 2>/dev/null \
+# Ensure target user can access workdir (only when su-ing)
+if [ -n "$RUN_AS_USER" ] && [ -d "$WORKDIR" ]; then
+  setfacl -R -m u:${RUN_AS_USER}:rwX "$WORKDIR" 2>/dev/null \
     || chmod -R o+rwX "$WORKDIR" 2>/dev/null \
     || true
 fi
@@ -86,44 +128,75 @@ else
   CLI_ARGS="--permission-mode bypassPermissions --output-format json --model '${ESC_MODEL}' -p"
 fi
 
-# Run as non-root user (bypassPermissions blocked for root)
-# Wrap with timeout to enforce Hard Rule #5 (subtasks ~1-2 min)
+# Timeout wrapper
 TIMEOUT_CMD=""
 if command -v timeout &>/dev/null && [ "$TIMEOUT" -gt 0 ] 2>/dev/null; then
   TIMEOUT_CMD="timeout --signal=TERM --kill-after=10 ${TIMEOUT}"
 fi
 
+# Execute — either direct or via su
+run_claude() {
+  local input_source="$1"  # "file", "prompt", or empty
+  
+  if [ -n "$RUN_AS_USER" ]; then
+    # Running as root → su to target user
+    if [ "$input_source" = "file" ]; then
+      chmod o+r "$USE_FILE_INPUT" 2>/dev/null || true
+      $TIMEOUT_CMD su - "$RUN_AS_USER" -s /bin/bash -c "
+        export ANTHROPIC_API_KEY='${ESC_API_KEY}'
+        export ANTHROPIC_BASE_URL='${ESC_BASE_URL}'
+        cd '${ESC_WORKDIR}' || { echo '{\"type\":\"error\",\"is_error\":true,\"result\":\"Cannot cd to workdir\"}'; exit 1; }
+        cat '$(escape_sq "$USE_FILE_INPUT")' | ${CLAUDE_BIN} ${CLI_ARGS} -
+      " 2>&1
+    else
+      $TIMEOUT_CMD su - "$RUN_AS_USER" -s /bin/bash -c "
+        export ANTHROPIC_API_KEY='${ESC_API_KEY}'
+        export ANTHROPIC_BASE_URL='${ESC_BASE_URL}'
+        cd '${ESC_WORKDIR}' || { echo '{\"type\":\"error\",\"is_error\":true,\"result\":\"Cannot cd to workdir\"}'; exit 1; }
+        ${CLAUDE_BIN} ${CLI_ARGS} '${ESC_PROMPT}'
+      " 2>&1
+    fi
+  else
+    # Running as non-root → direct execution
+    export ANTHROPIC_API_KEY="$API_KEY"
+    export ANTHROPIC_BASE_URL="$BASE_URL"
+    cd "$WORKDIR" || { echo '{"type":"error","is_error":true,"result":"Cannot cd to workdir"}'; exit 1; }
+    if [ "$input_source" = "file" ]; then
+      $TIMEOUT_CMD cat "$USE_FILE_INPUT" | $CLAUDE_BIN $CLI_ARGS - 2>&1
+    else
+      $TIMEOUT_CMD $CLAUDE_BIN $CLI_ARGS "$PROMPT" 2>&1
+    fi
+  fi
+}
+
 if [ -n "$USE_FILE_INPUT" ]; then
-  # Pipe from file — safe for prompts with special chars ($, backticks, quotes)
-  # Ensure coder can read the prompt file
-  chmod o+r "$USE_FILE_INPUT" 2>/dev/null || true
-  OUTPUT=$($TIMEOUT_CMD su - "$CLAUDE_USER" -s /bin/bash -c "
-    export ANTHROPIC_API_KEY='${ESC_API_KEY}'
-    export ANTHROPIC_BASE_URL='${ESC_BASE_URL}'
-    cd '${ESC_WORKDIR}' || { echo '{\"type\":\"error\",\"is_error\":true,\"result\":\"Cannot cd to workdir: ${ESC_WORKDIR}\"}'; exit 1; }
-    cat '$(escape_sq "$USE_FILE_INPUT")' | ${CLAUDE_BIN} ${CLI_ARGS} -
-  " 2>&1)
-  # Cleanup temp file if we created one
+  OUTPUT=$(run_claude "file")
   [[ "$USE_FILE_INPUT" == /tmp/spawn-prompt-* ]] && rm -f "$USE_FILE_INPUT"
 else
-  OUTPUT=$($TIMEOUT_CMD su - "$CLAUDE_USER" -s /bin/bash -c "
-    export ANTHROPIC_API_KEY='${ESC_API_KEY}'
-    export ANTHROPIC_BASE_URL='${ESC_BASE_URL}'
-    cd '${ESC_WORKDIR}' || { echo '{\"type\":\"error\",\"is_error\":true,\"result\":\"Cannot cd to workdir: ${ESC_WORKDIR}\"}'; exit 1; }
-    ${CLAUDE_BIN} ${CLI_ARGS} '${ESC_PROMPT}'
-  " 2>&1)
+  OUTPUT=$(run_claude "prompt")
 fi
 
 EXIT_CODE=$?
 
+# Capture data for auto-log trap
+SPAWN_EXIT_CODE=$EXIT_CODE
+
+# Try to extract session_id and cost from JSON output
+if echo "$OUTPUT" | tail -1 | grep -q '^{'; then
+  SPAWN_SESSION_ID=$(echo "$OUTPUT" | tail -1 | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('session_id',''))" 2>/dev/null || true)
+  SPAWN_COST=$(echo "$OUTPUT" | tail -1 | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('cost_usd', d.get('total_cost_usd', 0)))" 2>/dev/null || true)
+fi
+
 # Detect timeout (exit code 124 from timeout command)
 if [ $EXIT_CODE -eq 124 ]; then
+  SPAWN_ERROR_SUMMARY="CLI timed out after ${TIMEOUT}s"
   echo "{\"type\":\"error\",\"is_error\":true,\"result\":\"CLI timed out after ${TIMEOUT}s. Task may be too large — consider splitting into smaller subtasks (Hard Rule #5).\"}"
   exit 1
 fi
 
 # If su/claude failed and output is not JSON, wrap in error JSON
 if [ $EXIT_CODE -ne 0 ] && ! echo "$OUTPUT" | head -1 | grep -q '^{'; then
+  SPAWN_ERROR_SUMMARY="CLI exited with code ${EXIT_CODE}"
   echo "{\"type\":\"error\",\"is_error\":true,\"result\":\"CLI exited with code ${EXIT_CODE}: $(echo "$OUTPUT" | head -3 | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
   exit 1
 fi
