@@ -78,6 +78,9 @@ Note the `## [group-name]` tags on each entry block — these indicate which pro
 Read current `MEMORY.md` (in workspace root) and `memory/procedures.md`.
 These files are NOT auto-loaded in isolated sessions — you must read them explicitly.
 
+**Path note:** If you need to reference skill files (e.g., templates), they are at
+`skills/am-memory-consolidation/references/` relative to workspace root.
+
 For each extracted item, compare with existing content:
 
 - **New** → append to correct section in MEMORY.md with date comment `<!-- YYYY-MM-DD -->`
@@ -155,6 +158,7 @@ For each project subsection under `## 🏗️ Projects` in MEMORY.md:
 2. Write to `memory/projects/<project-name>.md` using the project summary template
 3. Create `memory/projects/` directory if it doesn't exist
 4. These are **derived views** — use `write` to overwrite the file completely each cycle (this is the one exception to the "never use write on existing files" rule — project summaries are regenerated, not edited)
+5. **Warning:** Any content the user manually added to project files that is NOT in MEMORY.md will be lost. This is by design — MEMORY.md is the source of truth
 
 Target: 30-60 lines per project summary. Keep it focused and current.
 

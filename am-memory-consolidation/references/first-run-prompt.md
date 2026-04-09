@@ -19,7 +19,7 @@ PROJECT_SUMMARIES=$(ls memory/projects/*.md 2>/dev/null | wc -l)
 Also count items in MEMORY.md sections: Key Decisions, Lessons Learned, Open Threads, Projects.
 Save all values — needed for before/after comparison.
 
-Create `memory/dream-log.md` if it doesn't exist (use template from `references/templates.md`).
+Create `memory/dream-log.md` if it doesn't exist (use template from `skills/am-memory-consolidation/references/templates.md`).
 
 If DAILY_LOGS == 0 AND MEMORY_LINES < 10 → this is a fresh instance. Skip to Phase 6.
 

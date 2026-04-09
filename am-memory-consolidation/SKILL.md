@@ -1,6 +1,6 @@
 ---
 name: am-memory-consolidation
-version: 1.0.0
+version: 1.1.0
 author: khoidoan
 description: >
   Cognitive memory consolidation for AI agents — daily "dream cycles" that scan
@@ -20,6 +20,10 @@ per-project context summaries.
 
 Inspired by how the human brain consolidates memories during sleep: replay, filter, store,
 forget, wake up lighter.
+
+> **Note:** OpenClaw has a built-in `memory-core` dreaming feature (signal-based, promotes
+> frequently-recalled snippets). This skill is complementary — it handles structured daily log
+> consolidation, project summaries, and growth control. Both can run together without conflict.
 
 ## Setup
 
@@ -70,7 +74,7 @@ Tag each entry block with its source context:
   "schedule": { "kind": "cron", "expr": "0 21 * * *", "tz": "UTC" },
   "payload": {
     "kind": "agentTurn",
-    "message": "Run memory consolidation.\n\nRead the consolidation prompt from the memory consolidation skill references and follow every step strictly.",
+    "message": "Run memory consolidation.\n\nRead skills/am-memory-consolidation/references/consolidation-prompt.md and follow every step strictly.",
     "timeoutSeconds": 0
   },
   "sessionTarget": "isolated",
@@ -124,8 +128,8 @@ Each night, the cron job creates an isolated session. The agent reads
 2. **Never remove ⚠️ PERMANENT, 📌 PIN, or 🔴 entries** — protected from archival
 3. **Backup before big changes** — if MEMORY.md changes >30%, save `.bak` copy first
 4. **Scope** — only read/write within `memory/` directory, `MEMORY.md`, and `AGENTS.md` (during setup)
-5. **Project summaries are derived** — MEMORY.md is source of truth, project files are overwritten each cycle
-6. **Isolated session** — cron prompt must explicitly read MEMORY.md and procedures.md (not auto-loaded)
+5. **Project summaries are derived** — MEMORY.md is source of truth, project files are regenerated each cycle. If the user has manually added content to project files beyond what MEMORY.md contains, that content will be lost on next consolidation. Users who want persistent project-specific notes should add them to MEMORY.md instead
+6. **Isolated session** — cron runs in isolated context. MEMORY.md and procedures.md are NOT auto-loaded — the consolidation prompt reads them explicitly. This also means no race condition with the user's active session
 
 ## Growth Control
 

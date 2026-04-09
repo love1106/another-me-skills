@@ -98,7 +98,7 @@
     "slug": "am-memory-consolidation",
     "name": "Memory Consolidation",
     "repo_path": "am-memory-consolidation",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "author_name": "khoidoan",
     "description": "Cognitive memory consolidation — daily dream cycles that scan daily logs, extract knowledge, consolidate into structured long-term memory."
   }
