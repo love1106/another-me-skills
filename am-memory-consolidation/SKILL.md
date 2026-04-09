@@ -71,7 +71,7 @@ Tag each entry block with its source context:
 ```json
 {
   "name": "am-memory-consolidation",
-  "schedule": { "kind": "cron", "expr": "0 21 * * *", "tz": "UTC" },
+  "schedule": { "kind": "cron", "expr": "0 4 * * *", "tz": "Asia/Ho_Chi_Minh" },
   "payload": {
     "kind": "agentTurn",
     "message": "Run memory consolidation.\n\nRead skills/am-memory-consolidation/references/consolidation-prompt.md and follow every step strictly.",
