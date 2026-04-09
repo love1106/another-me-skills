@@ -71,7 +71,7 @@ Tag each entry block with its source context:
 ```json
 {
   "name": "am-memory-consolidation",
-  "schedule": { "kind": "cron", "expr": "0 4 * * *", "tz": "Asia/Ho_Chi_Minh" },
+  "schedule": { "kind": "cron", "expr": "0 4 * * *", "tz": "<USER_TIMEZONE>" },
   "payload": {
     "kind": "agentTurn",
     "message": "Run memory consolidation.\n\nRead skills/am-memory-consolidation/references/consolidation-prompt.md and follow every step strictly.",
@@ -82,7 +82,7 @@ Tag each entry block with its source context:
 }
 ```
 
-Adjust schedule to the agent owner's timezone (default: 4AM local time).
+Replace `<USER_TIMEZONE>` with the agent owner's IANA timezone (e.g., `Asia/Ho_Chi_Minh`, `America/New_York`). The goal is 4AM local time.
 
 ### Step 4: Run First Consolidation
 
