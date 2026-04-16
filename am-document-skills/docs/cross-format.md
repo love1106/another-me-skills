@@ -69,6 +69,18 @@ plt.close()
 
 ## Workflow 4: Convert Formats
 
+### Kiểm tra tool trước khi dùng
+```bash
+# Check pandoc
+command -v pandoc &>/dev/null || echo "❌ pandoc chưa cài: apt-get install -y pandoc"
+
+# Check libreoffice
+command -v libreoffice &>/dev/null || echo "❌ libreoffice chưa cài: apt-get install -y libreoffice-calc"
+
+# Check xelatex (cho Vietnamese PDF)
+command -v xelatex &>/dev/null || echo "❌ xelatex chưa cài: apt-get install -y texlive-xetex"
+```
+
 ### Pandoc Conversions
 ```bash
 # Markdown → Word

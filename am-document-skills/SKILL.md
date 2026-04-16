@@ -13,6 +13,7 @@ description: >
   "giữ template", "thay nội dung", "fill template", "điền vào mẫu".
   NOT for: image generation, web scraping, database operations, code generation.
 ---
+<!-- Converted from hc-document-skills v1.3.0 -->
 
 # Document Skills — Tạo File Chuyên Nghiệp
 
@@ -108,12 +109,23 @@ Arial, Be Vietnam Pro đều hỗ trợ Unicode tiếng Việt đầy đủ — 
 5. DOCX/XLSX: Vietnamese → Be Vietnam Pro, English → Inter. Font render phụ thuộc máy mở file
 6. PPTX: Chỉ dùng web-safe fonts (Arial, Verdana...) — Be Vietnam Pro/Inter có thể không có trên máy người xem
 
-**Cài font Be Vietnam Pro:**
+**Detect font path (multi-OS):**
+```bash
+# Tìm font path tự động
+BVP_PATH=$(fc-list | grep -i "Be Vietnam Pro" | head -1 | cut -d: -f1 | xargs dirname 2>/dev/null)
+INTER_PATH=$(fc-list | grep -i "Inter" | head -1 | cut -d: -f1 | xargs dirname 2>/dev/null)
+echo "Be Vietnam Pro: ${BVP_PATH:-NOT FOUND}"
+echo "Inter: ${INTER_PATH:-NOT FOUND}"
+```
+
+**Cài font Be Vietnam Pro (nếu chưa có):**
 ```bash
 # Download từ google/fonts repo
+FONT_DIR="/usr/share/fonts/truetype/be-vietnam-pro"  # Linux default
+mkdir -p "$FONT_DIR"
 BASE="https://raw.githubusercontent.com/google/fonts/main/ofl/bevietnampro"
 for v in Regular Bold Italic BoldItalic Medium SemiBold Light; do
-  curl -sL -o "/usr/share/fonts/truetype/be-vietnam-pro/BeVietnamPro-${v}.ttf" "${BASE}/BeVietnamPro-${v}.ttf"
+  curl -sL -o "${FONT_DIR}/BeVietnamPro-${v}.ttf" "${BASE}/BeVietnamPro-${v}.ttf"
 done
 fc-cache -f
 ```

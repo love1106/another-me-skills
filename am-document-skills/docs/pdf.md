@@ -31,10 +31,26 @@ from fpdf import FPDF
 import datetime
 
 # ============================================================
-# FONT PATHS — Điều chỉnh nếu cài ở path khác
+# FONT PATHS — Auto-detect hoặc hardcode nếu biết path
 # ============================================================
-FONT_VN = '/usr/share/fonts/truetype/be-vietnam-pro'
-FONT_EN = '/usr/share/fonts/truetype/inter'
+import subprocess
+
+def _find_font_dir(font_name, fallback):
+    """Auto-detect font directory via fc-list."""
+    try:
+        out = subprocess.check_output(
+            f'fc-list | grep -i "{font_name}" | head -1 | cut -d: -f1',
+            shell=True, text=True
+        ).strip()
+        if out:
+            import os
+            return os.path.dirname(out)
+    except Exception:
+        pass
+    return fallback
+
+FONT_VN = _find_font_dir('Be Vietnam Pro', '/usr/share/fonts/truetype/be-vietnam-pro')
+FONT_EN = _find_font_dir('Inter', '/usr/share/fonts/truetype/inter')
 
 
 class ReportPDF(FPDF):
