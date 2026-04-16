@@ -101,5 +101,13 @@
     "version": "1.1.0",
     "author_name": "khoidoan",
     "description": "Cognitive memory consolidation — daily dream cycles that scan daily logs, extract knowledge, consolidate into structured long-term memory."
+  },
+  {
+    "slug": "am-document-skills",
+    "name": "Document Skills",
+    "repo_path": "am-document-skills",
+    "version": "1.0.0",
+    "author_name": "khoidoan",
+    "description": "Create professional documents: PDF, Word (DOCX), Excel (XLSX), PowerPoint (PPTX). Template fill, charts, Vietnamese diacritics support."
   }
 ]
