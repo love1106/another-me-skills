@@ -302,10 +302,17 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 )
 
-# Register Be Vietnam Pro cho reportlab
-pdfmetrics.registerFont(TTFont('BeVietnam', '/usr/share/fonts/truetype/be-vietnam-pro/BeVietnamPro-Regular.ttf'))
-pdfmetrics.registerFont(TTFont('BeVietnam-Bold', '/usr/share/fonts/truetype/be-vietnam-pro/BeVietnamPro-Bold.ttf'))
-pdfmetrics.registerFont(TTFont('BeVietnam-Italic', '/usr/share/fonts/truetype/be-vietnam-pro/BeVietnamPro-Italic.ttf'))
+# Register Be Vietnam Pro cho reportlab — dùng auto-detect
+import subprocess as _sp
+def _font_path(name, fallback):
+    try:
+        p = _sp.check_output(f'fc-list | grep -i "{name}" | head -1 | cut -d: -f1', shell=True, text=True).strip()
+        return p if p else fallback
+    except: return fallback
+
+pdfmetrics.registerFont(TTFont('BeVietnam', _font_path('BeVietnamPro-Regular', '/usr/share/fonts/truetype/be-vietnam-pro/BeVietnamPro-Regular.ttf')))
+pdfmetrics.registerFont(TTFont('BeVietnam-Bold', _font_path('BeVietnamPro-Bold', '/usr/share/fonts/truetype/be-vietnam-pro/BeVietnamPro-Bold.ttf')))
+pdfmetrics.registerFont(TTFont('BeVietnam-Italic', _font_path('BeVietnamPro-Italic', '/usr/share/fonts/truetype/be-vietnam-pro/BeVietnamPro-Italic.ttf')))
 
 doc = SimpleDocTemplate(
     'report.pdf',

@@ -76,7 +76,7 @@ Arial, Be Vietnam Pro đều hỗ trợ Unicode tiếng Việt đầy đủ — 
 | Monospace / Code | **Courier New** | monospace | — |
 | PPTX (web-safe, có dấu VN) | **Arial** | Tahoma | Verdana |
 
-**Be Vietnam Pro font paths:**
+**Be Vietnam Pro font paths** (Linux default — dùng `fc-list` để auto-detect):
 ```
 /usr/share/fonts/truetype/be-vietnam-pro/BeVietnamPro-Regular.ttf
 /usr/share/fonts/truetype/be-vietnam-pro/BeVietnamPro-Bold.ttf
@@ -87,7 +87,7 @@ Arial, Be Vietnam Pro đều hỗ trợ Unicode tiếng Việt đầy đủ — 
 /usr/share/fonts/truetype/be-vietnam-pro/BeVietnamPro-Light.ttf
 ```
 
-**Inter font paths:**
+**Inter font paths** (Linux default — dùng `fc-list` để auto-detect):
 ```
 /usr/share/fonts/truetype/inter/Inter-Regular.ttf
 /usr/share/fonts/truetype/inter/Inter-Bold.ttf
