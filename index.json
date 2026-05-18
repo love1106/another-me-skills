@@ -109,5 +109,13 @@
     "version": "1.0.0",
     "author_name": "khoidoan",
     "description": "Create professional documents: PDF, Word (DOCX), Excel (XLSX), PowerPoint (PPTX). Template fill, charts, Vietnamese diacritics support."
+  },
+  {
+    "slug": "am-image-gen-skill",
+    "name": "image-gen-skill",
+    "repo_path": "am-image-gen-skill",
+    "version": "1.0.0",
+    "author_name": "khoidoan",
+    "description": "Generate professional images: logo, banner, product photography, model+product, mockup"
   }
 ]
