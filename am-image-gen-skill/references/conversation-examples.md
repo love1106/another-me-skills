@@ -23,7 +23,21 @@ End-to-end examples showing the full Suggest → Refine → Generate flow.
 
 **User:** Brand "GLOWLAB", dùng cho IG post
 
-**Agent (Step 4 → builds prompt → Step 4b checklist → Step 5):**
+**Agent (Step 4 → builds prompt → Step 5 confirm):**
+
+> 📋 Em confirm trước khi tạo:
+> - **Nội dung:** Chai serum GLOWLAB 30ml, bọ quanh bởi lát cam, lá bạc hà, giọt tinh chất trên nền marble
+> - **Size:** 1024x1024 (1:1 IG post)
+> - **Quality:** high
+> - **Format:** jpeg
+>
+> Confirm để em tạo nhé?
+
+**User:** ok tạo đi
+
+**Agent (Step 6 → generate):**
+
+> Chờ em khoảng 1 phút nhé.
 
 *Internal prompt built:*
 ```
@@ -38,7 +52,7 @@ python3 <skill_path>/scripts/generate.py \
 *Sends output via SendMessage*
 
 **Agent:**
-> Đây anh — serum GLOWLAB kiểu Ingredient Story. Anh muốn điều chỉnh gì không?
+> Serum GLOWLAB kiểu Ingredient Story. Cần điều chỉnh gì không?
 
 **User:** Đẹp rồi, nhưng muốn nền sáng hơn, bớt cam đi
 
@@ -69,7 +83,21 @@ python3 <skill_path>/scripts/generate.py \
 
 **User:** Mộc mạc
 
-**Agent (builds → generates):**
+**Agent (Step 5 → confirm):**
+
+> 📋 Em confirm trước khi tạo:
+> - **Nội dung:** Logo "Mây Cafe" — icon mây bút lông, chữ viết tay mộc mạc, tone nâu ấm
+> - **Size:** 1024x1024
+> - **Quality:** high
+> - **Format:** png (nền trong suốt)
+>
+> Confirm để em tạo nhé?
+
+**User:** Ư
+
+**Agent (Step 6 → generate):**
+
+> Chờ em khoảng 1 phút nhé.
 
 *Prompt: ~80 words, transparent background, 1:1*
 ```
@@ -107,7 +135,23 @@ ls -lt <media_inbound>/ | head -3
 
 **User:** FB post
 
-**Agent (Step 5 — runs script with ref image):**
+**Agent (Step 5 → confirm):**
+
+> 📋 Em confirm trước khi tạo:
+> - **Nội dung:** Banner VitaFresh nước ép trái cây, layout split, sale 30%, style theo reference
+> - **Size:** 1024x1024 (FB post)
+> - **Quality:** high
+> - **Format:** jpeg
+> - **Ref images:** 1 (ảnh banner mẫu)
+>
+> Confirm để em tạo nhé?
+
+**User:** ok
+
+**Agent (Step 6 → generate):**
+
+> Chờ em khoảng 1-2 phút nhé (có ref image).
+
 ```bash
 python3 <skill_path>/scripts/generate.py \
   --prompt "<built prompt using UC1 skeleton>" \
@@ -122,12 +166,25 @@ python3 <skill_path>/scripts/generate.py \
 
 **User:** Gen ảnh: chai nước hoa đen sang trọng, nền đen, ánh vàng, khói, 1:1, luxury dark, không text
 
-**Agent (detects UC12 — full prompt provided, skips Steps 1-3):**
+**Agent (detects UC12 — full prompt provided, skips Steps 1-3, vào Step 5 confirm):**
 
-*Builds enhanced prompt from user's description, adds lighting/material/technical detail → generates directly*
+> 📋 Em confirm trước khi tạo:
+> - **Nội dung:** Chai nước hoa đen, nền đen, ánh sáng vàng dramatic, khói, luxury dark
+> - **Size:** 1024x1024
+> - **Quality:** high
+> - **Format:** jpeg
+>
+> Confirm để em tạo nhé?
+
+**User:** tạo đi
 
 **Agent:**
-> Done — luxury dark perfume. Cần tweak gì không?
+> Chờ em khoảng 1 phút nhé.
+
+*Builds enhanced prompt from user's description, adds lighting/material/technical detail → generates*
+
+**Agent:**
+> Luxury dark perfume. Cần tweak gì không?
 
 ---
 
@@ -146,6 +203,7 @@ python3 <skill_path>/scripts/generate.py \
 
 **Agent:**
 > Em save style này làm template. Gửi em tên + mô tả ngắn 4 SP còn lại, em gen lần lượt cùng style nhé.
+> Đã confirm style rồi nên em sẽ gen luôn không hỏi lại từng ảnh.
 >
 > *[Saves base prompt to session context for reuse]*
 
@@ -155,4 +213,4 @@ python3 <skill_path>/scripts/generate.py \
 - Kem dưỡng 50ml jar trắng
 - Mặt nạ gói 25ml sachet bạc
 
-**Agent:** *generates each, swapping only the product description, keeping everything else identical*
+**Agent:** *generates each, swapping only the product description, keeping everything else identical — không confirm lại từng ảnh vì user đã confirm style*

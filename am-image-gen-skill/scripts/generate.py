@@ -104,7 +104,8 @@ def make_output_path(output: str, fmt: str) -> str:
 
 
 def generate(prompt: str, size: str, images: list = None, quality: str = "high",
-             background: str = None, output: str = None, fmt: str = None, model: str = None):
+             background: str = None, output: str = None, fmt: str = None, model: str = None,
+             count: int = 1):
     base_url, api_key = validate_env()
     model_name = model or DEFAULT_MODEL
 
@@ -129,6 +130,8 @@ def generate(prompt: str, size: str, images: list = None, quality: str = "high",
             "quality": quality,
         }
 
+    if count > 1:
+        payload["n"] = count
     if background:
         payload["background"] = background
     if fmt:
@@ -182,25 +185,35 @@ def generate(prompt: str, size: str, images: list = None, quality: str = "high",
             print(f"API ERROR: {error_msg}", file=sys.stderr)
         sys.exit(1)
 
-    # Save output
-    img_data = result["data"][0]
-    out_path = make_output_path(output, fmt or "png")
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    # Save output(s)
+    output_paths = []
+    for idx, img_data in enumerate(result["data"]):
+        if count > 1 and not output:
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+            ext = fmt if fmt else "png"
+            out_path = os.path.join(OUTBOUND_DIR, f"gen-{ts}-{idx+1}.{ext}")
+        else:
+            out_path = make_output_path(output, fmt or "png")
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    if "b64_json" in img_data:
-        with open(out_path, "wb") as f:
-            f.write(base64.b64decode(img_data["b64_json"]))
-        size_mb = os.path.getsize(out_path) / (1024 * 1024)
-        print(out_path)
-        print(f"  {size_mb:.1f}MB | {elapsed:.1f}s | {quality}", file=sys.stderr)
-    elif "url" in img_data:
-        urllib.request.urlretrieve(img_data["url"], out_path)
-        size_mb = os.path.getsize(out_path) / (1024 * 1024)
-        print(out_path)
-        print(f"  {size_mb:.1f}MB | from URL", file=sys.stderr)
-    else:
-        print(f"UNEXPECTED RESPONSE: {list(img_data.keys())}", file=sys.stderr)
-        sys.exit(1)
+        if "b64_json" in img_data:
+            with open(out_path, "wb") as f:
+                f.write(base64.b64decode(img_data["b64_json"]))
+            size_mb = os.path.getsize(out_path) / (1024 * 1024)
+            print(out_path)
+            print(f"  {size_mb:.1f}MB | {elapsed:.1f}s | {quality}", file=sys.stderr)
+        elif "url" in img_data:
+            urllib.request.urlretrieve(img_data["url"], out_path)
+            size_mb = os.path.getsize(out_path) / (1024 * 1024)
+            print(out_path)
+            print(f"  {size_mb:.1f}MB | from URL", file=sys.stderr)
+        else:
+            print(f"UNEXPECTED RESPONSE: {list(img_data.keys())}", file=sys.stderr)
+            sys.exit(1)
+        output_paths.append(out_path)
+
+    if count > 1:
+        print(f"  Generated {len(output_paths)} images total", file=sys.stderr)
 
 
 if __name__ == "__main__":
@@ -213,6 +226,7 @@ if __name__ == "__main__":
     parser.add_argument("--background", choices=["transparent", "opaque", "auto"])
     parser.add_argument("--format", choices=["png", "jpeg", "webp"], help="Output format")
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Model (default: {DEFAULT_MODEL})")
+    parser.add_argument("--count", type=int, default=1, choices=[1, 2, 3, 4], help="Number of images (1-4)")
     args = parser.parse_args()
 
     generate(
@@ -224,4 +238,5 @@ if __name__ == "__main__":
         output=args.output,
         fmt=args.format,
         model=args.model,
+        count=args.count,
     )
