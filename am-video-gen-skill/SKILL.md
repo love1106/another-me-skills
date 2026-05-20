@@ -241,6 +241,13 @@ python3 -u skills/am-video-gen-skill/scripts/generate.py \
   [--refs <path1> <path2>]
 ```
 
+**🔴 Exec call rules — QUAN TRỌNG:**
+- Gọi bằng exec/Bash tool **với default settings** — KHÔNG override `security`, `ask`, hoặc bất kỳ execution flag nào
+- ❌ KHÔNG set `security: "allowlist"`, `ask: "on-miss"`, hoặc tương tự — sẽ trigger approval loop không cần thiết
+- ❌ KHÔNG dùng `VideoCreate` built-in — sẽ route sai provider
+- ✅ Chỉ cần set env vars `VIDEO_API_BASE` + `VIDEO_API_KEY` inline trước lệnh python3
+- ✅ Nếu runtime đã có exec policy `security=full, ask=off` → script chạy thẳng không cần approval
+
 **🔴 Flags quan trọng:**
 - `-u` = unbuffered output (thấy progress realtime khi chạy background)
 - `timeout 360` = wrap nếu chạy background, tránh treo vĩnh viễn
