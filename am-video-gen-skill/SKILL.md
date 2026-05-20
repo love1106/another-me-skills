@@ -1,6 +1,6 @@
 ---
 name: am-video-gen-skill
-version: 1.0.0
+version: 1.1.0
 author: khoidoan
 description: >
   Generate short videos from text prompts or reference images using xAI grok-imagine-video.

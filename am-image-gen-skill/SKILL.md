@@ -1,6 +1,6 @@
 ---
 name: am-image-gen-skill
-version: 1.1.0
+version: 1.2.0
 author: khoidoan
 description: >
   Generate professional images for business: logo, banner, product photography, model+product, mockup.
