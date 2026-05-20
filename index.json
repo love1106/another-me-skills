@@ -22,7 +22,7 @@
   {
     "slug": "am-devices",
     "name": "My Devices",
-    "description": "Điều khiển thiết bị của user qua SSH và CUA (Computer-Use Agent). SSH-first, CUA-fallback. Chạy lệnh, check thông tin, mở app, screenshot, GUI control, transfer file.",
+    "description": "\u0110i\u1ec1u khi\u1ec3n thi\u1ebft b\u1ecb c\u1ee7a user qua SSH v\u00e0 CUA (Computer-Use Agent). SSH-first, CUA-fallback. Ch\u1ea1y l\u1ec7nh, check th\u00f4ng tin, m\u1edf app, screenshot, GUI control, transfer file.",
     "category": "utility",
     "tags": [
       "devices",
@@ -40,7 +40,7 @@
   {
     "slug": "am-create-skill",
     "name": "Skill Manager",
-    "description": "Create, analyze, or improve OpenClaw skills — full lifecycle management with orchestrator pattern support, complexity scoring, and multi-round review.",
+    "description": "Create, analyze, or improve OpenClaw skills \u2014 full lifecycle management with orchestrator pattern support, complexity scoring, and multi-round review.",
     "category": "developer",
     "tags": [
       "skill",
@@ -58,7 +58,7 @@
   {
     "slug": "am-planner-code-task",
     "name": "Code Task Planner",
-    "description": "Plan and break down coding tasks — features, bug fixes, refactors, API changes. Analyzes codebase, clarifies requirements, defines acceptance criteria, test strategy, and implementation steps. Default output: GitHub issue. Supports Jira, Monday, Trello.",
+    "description": "Plan and break down coding tasks \u2014 features, bug fixes, refactors, API changes. Analyzes codebase, clarifies requirements, defines acceptance criteria, test strategy, and implementation steps. Default output: GitHub issue. Supports Jira, Monday, Trello.",
     "category": "developer",
     "tags": [
       "planning",
@@ -100,7 +100,7 @@
     "repo_path": "am-memory-consolidation",
     "version": "1.1.0",
     "author_name": "khoidoan",
-    "description": "Cognitive memory consolidation — daily dream cycles that scan daily logs, extract knowledge, consolidate into structured long-term memory."
+    "description": "Cognitive memory consolidation \u2014 daily dream cycles that scan daily logs, extract knowledge, consolidate into structured long-term memory."
   },
   {
     "slug": "am-document-skills",
@@ -122,8 +122,8 @@
     "slug": "am-video-gen-skill",
     "name": "video-gen-skill",
     "repo_path": "am-video-gen-skill",
-    "version": "1.1.0",
+    "version": "2.0.0",
     "author_name": "khoidoan",
-    "description": "Generate short videos (1-15s) from text or images using xAI grok-imagine-video. Text-to-video, image-to-video, reference-to-video. Exec-safe, fallback to OPENAI_* env vars."
+    "description": "Generate, edit, and extend short videos using xAI grok-imagine-video. 5 modes: text-to-video, image-to-video, reference-to-video, video editing, video extension."
   }
 ]
