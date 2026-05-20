@@ -76,9 +76,9 @@ User images land in the platform media inbound directory.
 To find the latest: `ls -lt <media_inbound_path>/ | head -5`
 
 **⚙️ Environment:**
-Script reads from env vars (configure per deployment):
-- `IMAGE_API_BASE` — LLM proxy base URL (required)
-- `IMAGE_API_KEY` — API key for image generation (required)
+Script reads from env vars (priority: IMAGE_* > OPENAI_*):
+- `IMAGE_API_BASE` or `OPENAI_BASE_URL` — LLM proxy base URL (one required)
+- `IMAGE_API_KEY` or `OPENAI_API_KEY` — API key for image generation (one required)
 
 ---
 

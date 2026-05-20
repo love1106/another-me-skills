@@ -54,9 +54,9 @@ python3 skills/am-video-gen-skill/scripts/generate.py \
 
 **⚙️ Required env vars:**
 
-Script reads from env vars (configure per deployment):
-- `VIDEO_API_BASE` — OpenAI-compatible proxy base URL (required)
-- `VIDEO_API_KEY` — API key for video generation (required)
+Script reads from env vars (priority: VIDEO_* > OPENAI_*):
+- `VIDEO_API_BASE` or `OPENAI_BASE_URL` — OpenAI-compatible proxy base URL (one required)
+- `VIDEO_API_KEY` or `OPENAI_API_KEY` — API key for video generation (one required)
 - `VIDEO_OUTBOUND_DIR` — Output directory (optional, default: `~/.openclaw/workspace/outbound`)
 
 **🔴 LUÔN dùng `scripts/generate.py`, KHÔNG dùng `VideoCreate` built-in.**

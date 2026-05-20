@@ -8,9 +8,9 @@ Usage:
     [--output out.png] [--quality high|medium|low] [--background transparent|opaque|auto] \
     [--format png|jpeg|webp] [--model gpt-image-2]
 
-Required env vars:
-  IMAGE_API_BASE — OpenAI-compatible base URL (e.g. https://api.openai.com/v1)
-  IMAGE_API_KEY  — API key for authentication
+Env vars (priority: IMAGE_* > OPENAI_*):
+  IMAGE_API_BASE or OPENAI_BASE_URL — OpenAI-compatible base URL
+  IMAGE_API_KEY  or OPENAI_API_KEY  — API key for authentication
 """
 
 import argparse
@@ -35,15 +35,15 @@ MAX_RETRIES = 2            # retry up to 2 times on failure
 
 
 def validate_env():
-    """Check required environment variables."""
-    base = os.environ.get("IMAGE_API_BASE")
-    key = os.environ.get("IMAGE_API_KEY")
+    """Check required environment variables. Falls back to OPENAI_* if IMAGE_* not set."""
+    base = os.environ.get("IMAGE_API_BASE") or os.environ.get("OPENAI_BASE_URL", "")
+    key = os.environ.get("IMAGE_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
     if not base:
-        print("ERROR: IMAGE_API_BASE env var not set.", file=sys.stderr)
-        print("  Set it to your OpenAI-compatible API base URL.", file=sys.stderr)
+        print("ERROR: Neither IMAGE_API_BASE nor OPENAI_BASE_URL env var is set.", file=sys.stderr)
+        print("  Set IMAGE_API_BASE or OPENAI_BASE_URL to your OpenAI-compatible API base URL.", file=sys.stderr)
         sys.exit(1)
     if not key:
-        print("ERROR: IMAGE_API_KEY env var not set.", file=sys.stderr)
+        print("ERROR: Neither IMAGE_API_KEY nor OPENAI_API_KEY env var is set.", file=sys.stderr)
         sys.exit(1)
     return base, key
 
