@@ -114,15 +114,16 @@
     "slug": "am-image-gen-skill",
     "name": "image-gen-skill",
     "repo_path": "am-image-gen-skill",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "author_name": "khoidoan",
-    "description": "Generate professional images: logo, banner, product photography, model+product, mockup"
+    "description": "Generate professional images: logo, banner, product photography, model+product, mockup. Exec-safe, fallback to OPENAI_* env vars."
   },
   {
     "slug": "am-video-gen-skill",
     "name": "video-gen-skill",
     "repo_path": "am-video-gen-skill",
-    "version": "1.0.0",
-    "author_name": "khoidoan"
+    "version": "1.1.0",
+    "author_name": "khoidoan",
+    "description": "Generate short videos (1-15s) from text or images using xAI grok-imagine-video. Text-to-video, image-to-video, reference-to-video. Exec-safe, fallback to OPENAI_* env vars."
   }
 ]
