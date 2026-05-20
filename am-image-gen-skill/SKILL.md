@@ -76,9 +76,9 @@ User images land in the platform media inbound directory.
 To find the latest: `ls -lt <media_inbound_path>/ | head -5`
 
 **⚙️ Environment:**
-Script reads from env vars (configure per deployment):
-- `IMAGE_API_BASE` — LLM proxy base URL (required)
-- `IMAGE_API_KEY` — API key for image generation (required)
+Script reads from env vars (priority: IMAGE_* > OPENAI_*):
+- `IMAGE_API_BASE` or `OPENAI_BASE_URL` — LLM proxy base URL (one required)
+- `IMAGE_API_KEY` or `OPENAI_API_KEY` — API key for image generation (one required)
 
 ---
 
@@ -182,12 +182,21 @@ Nếu user muốn sửa → quay lại Step 3/4 điều chỉnh → confirm lạ
 
 Run script (see Tool section above for full params):
 ```bash
+IMAGE_API_BASE="<proxy_base_url>" \
+IMAGE_API_KEY="<api_key>" \
 python3 <skill_path>/scripts/generate.py \
   --prompt "<prompt from Step 4>" \
   --size <size> --quality high \
   --images <ref paths if UC1-9> \
   --format <jpeg for photos, png for logos>
 ```
+
+**🔴 Exec call rules — QUAN TRỌNG:**
+- Gọi bằng exec/Bash tool **với default settings** — KHÔNG override `security`, `ask`, hoặc bất kỳ execution flag nào
+- ❌ KHÔNG set `security: "allowlist"`, `ask: "on-miss"`, hoặc tương tự — sẽ trigger approval loop không cần thiết
+- ❌ KHÔNG dùng `ImageCreate` built-in — sẽ auto-attach conversation media gây fail >6MB
+- ✅ Chỉ cần set env vars `IMAGE_API_BASE` + `IMAGE_API_KEY` inline trước lệnh python3
+- ✅ Nếu runtime đã có exec policy `security=full, ask=off` → script chạy thẳng không cần approval
 
 **Size defaults:** Logo→`1024x1024` | Social/Model/Poster→`1024x1792` | Web banner→`1792x1024` | Product→`1024x1024`
 

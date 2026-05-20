@@ -13,9 +13,9 @@ Usage:
   # Reference-to-video (style/subject reference)
   python3 generate.py --prompt "Model walks on runway wearing <IMAGE_1>" --refs /path/to/ref1.jpg /path/to/ref2.jpg
 
-Required env vars:
-  VIDEO_API_BASE — Proxy base URL (e.g. https://your-proxy.example.com/v1)
-  VIDEO_API_KEY  — API key for authentication
+Env vars (priority: VIDEO_* > OPENAI_*):
+  VIDEO_API_BASE or OPENAI_BASE_URL — Proxy base URL
+  VIDEO_API_KEY  or OPENAI_API_KEY  — API key for authentication
 """
 
 import argparse
@@ -38,14 +38,14 @@ MAX_REF_KB = 200        # Skip resize if already under this
 
 
 def get_env():
-    """Get and validate required environment variables."""
-    base = os.environ.get("VIDEO_API_BASE", "")
-    key = os.environ.get("VIDEO_API_KEY", "")
+    """Get and validate required environment variables. Falls back to OPENAI_* if VIDEO_* not set."""
+    base = os.environ.get("VIDEO_API_BASE") or os.environ.get("OPENAI_BASE_URL", "")
+    key = os.environ.get("VIDEO_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
     if not base:
-        print("ERROR: VIDEO_API_BASE env var not set.", file=sys.stderr)
+        print("ERROR: Neither VIDEO_API_BASE nor OPENAI_BASE_URL env var is set.", file=sys.stderr)
         sys.exit(1)
     if not key:
-        print("ERROR: VIDEO_API_KEY env var not set.", file=sys.stderr)
+        print("ERROR: Neither VIDEO_API_KEY nor OPENAI_API_KEY env var is set.", file=sys.stderr)
         sys.exit(1)
     return base.rstrip("/"), key
 
