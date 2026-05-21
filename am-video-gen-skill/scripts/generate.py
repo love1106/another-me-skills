@@ -306,7 +306,7 @@ def cmd_generate(args):
     mode = "text-to-video"
     if args.image:
         mode = "image-to-video"
-        processed = process_image(args.image, target_ratio=args.aspect_ratio, max_px=MAX_IMG_PX)
+        processed = process_image(args.image, target_ratio=None, max_px=MAX_IMG_PX)
         payload["image"] = {"url": encode_image(processed)}
         if not args.prompt:
             mode = "image-to-video-auto"
