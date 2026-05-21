@@ -1,6 +1,6 @@
 ---
 name: am-video-gen-skill
-version: 2.0.0
+version: 2.0.1
 author: khoidoan
 description: >
   Generate, edit, and extend short videos using xAI grok-imagine-video.
