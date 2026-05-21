@@ -1,6 +1,6 @@
 ---
 name: am-video-gen-skill
-version: 2.5.0
+version: 2.6.0
 author: khoidoan
 description: >
   Generate, edit, and extend short videos using xAI grok-imagine-video.
@@ -19,7 +19,7 @@ Read this SKILL.md always. No third-party references needed.
 ## Tool: `scripts/generate.py`
 
 ```bash
-python3 am-video-gen-skill/scripts/generate.py \
+python3 skills/am-video-gen-skill/scripts/generate.py \
   --mode generate \
   --prompt "..." \
   --duration 5 \
@@ -115,7 +115,7 @@ Sản phẩm này là gì? (VD: nước hoa, bình nước, loa bluetooth...)
 
 **Bước 1: Analyze** — chạy `--analyze` để get recommendation:
 ```bash
-python3 am-video-gen-skill/scripts/generate.py \
+python3 skills/am-video-gen-skill/scripts/generate.py \
   --image <path> --aspect-ratio 9:16 --analyze
 ```
 Output JSON với `action`: `none` | `crop` | `outpaint`
@@ -130,7 +130,7 @@ Output JSON với `action`: `none` | `crop` | `outpaint`
 
 **Crop** (recommend mặc định):
 ```bash
-python3 am-video-gen-skill/scripts/generate.py \
+python3 skills/am-video-gen-skill/scripts/generate.py \
   --image <path> --prompt "..." --aspect-ratio 9:16 --crop
 ```
 - Center-crop ảnh về target ratio trước khi gen
@@ -141,12 +141,12 @@ python3 am-video-gen-skill/scripts/generate.py \
 ```bash
 # Bước 1: Extend canvas bằng gpt-image-2
 IMAGE_API_BASE="$OPENAI_BASE_URL" IMAGE_API_KEY="$OPENAI_API_KEY" \
-python3 am-image-gen-skill/scripts/generate.py \
+python3 skills/am-image-gen-skill/scripts/generate.py \
   --prompt "Extend background to portrait format. Keep product exactly as-is, centered. [mô tả background]." \
   --images <path> --size 1024x1792 --quality high --output /tmp/extended.png
 
 # Bước 2: Gen video từ ảnh đã extend
-python3 am-video-gen-skill/scripts/generate.py \
+python3 skills/am-video-gen-skill/scripts/generate.py \
   --image /tmp/extended.png --prompt "..." --aspect-ratio 9:16
 ```
 - ⚠️ Warn user: chi tiết SP có thể bị thay đổi nhẹ (tỷ lệ, màu sắc, text)
@@ -262,7 +262,7 @@ Anh confirm em tạo nhé?
 cd ~/.openclaw/workspace && \
 OPENAI_BASE_URL="$HIP_IMAGE_BASE_URL" \
 OPENAI_API_KEY="$HIP_IMAGE_API_KEY" \
-python3 -u am-video-gen-skill/scripts/generate.py \
+python3 -u skills/am-video-gen-skill/scripts/generate.py \
   --mode <mode> \
   --prompt "<prompt>" \
   --duration <N> \

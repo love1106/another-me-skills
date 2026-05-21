@@ -86,16 +86,44 @@ def get_env():
     if not key:
         print("ERROR: OPENAI_API_KEY env var not set.", file=sys.stderr)
         sys.exit(1)
-    return base.rstrip("/"), key
+    base = base.rstrip("/")
+    # Ensure base URL ends with /v1
+    if not base.endswith("/v1"):
+        base = base + "/v1"
+    return base, key
 
 
 _imagemagick_available = None
 
+def _install_imagemagick() -> bool:
+    """Attempt to install ImageMagick via apt-get. Returns True if successful."""
+    try:
+        print("INFO: ImageMagick not found. Installing...", file=sys.stderr)
+        subprocess.run(
+            ["apt-get", "update", "-qq"],
+            capture_output=True, timeout=60
+        )
+        result = subprocess.run(
+            ["apt-get", "install", "-y", "-qq", "imagemagick"],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0:
+            print("INFO: ImageMagick installed successfully.", file=sys.stderr)
+            return True
+        print(f"WARNING: ImageMagick install failed: {result.stderr}", file=sys.stderr)
+    except Exception as e:
+        print(f"WARNING: ImageMagick install error: {e}", file=sys.stderr)
+    return False
+
+
 def has_imagemagick() -> bool:
-    """Check if ImageMagick is available (cached)."""
+    """Check if ImageMagick is available, auto-install if missing (cached)."""
     global _imagemagick_available
     if _imagemagick_available is None:
         _imagemagick_available = subprocess.run(["which", "convert"], capture_output=True).returncode == 0
+        if not _imagemagick_available:
+            if _install_imagemagick():
+                _imagemagick_available = subprocess.run(["which", "convert"], capture_output=True).returncode == 0
     return _imagemagick_available
 
 
