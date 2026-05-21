@@ -122,7 +122,7 @@
     "slug": "am-video-gen-skill",
     "name": "video-gen-skill",
     "repo_path": "am-video-gen-skill",
-    "version": "2.5.0",
+    "version": "2.6.0",
     "author_name": "khoidoan",
     "description": "Generate, edit, and extend short videos using xAI grok-imagine-video. 5 modes: text-to-video, image-to-video, reference-to-video, video editing, video extension."
   }
