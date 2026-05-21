@@ -8,19 +8,31 @@ Modes:
   extend    — extend existing video with new footage
 
 Usage:
+  # Text-to-video
   python3 generate.py --prompt "A cat on a beach" --duration 5
+
+  # Image-to-video
+  python3 generate.py --prompt "Flower blooms" --image photo.jpg
+
+  # Image-to-video (auto-animate, no prompt needed)
   python3 generate.py --image photo.jpg
+
+  # Reference-to-video
   python3 generate.py --prompt "Person from <IMAGE_1> wears <IMAGE_2>" --refs person.jpg shirt.jpg
+
+  # Edit existing video
   python3 generate.py --mode edit --video input.mp4 --prompt "Add sunglasses"
+
+  # Extend existing video
   python3 generate.py --mode extend --video input.mp4 --prompt "Camera zooms out" --duration 6
 
-Env vars (priority: VIDEO_* > OPENAI_*):
-  VIDEO_API_BASE or OPENAI_BASE_URL — Proxy base URL
-  VIDEO_API_KEY  or OPENAI_API_KEY  — API key for authentication
-  VIDEO_OUTBOUND_DIR — Output directory (optional)
+Required env vars:
+  OPENAI_BASE_URL — Proxy base URL
+  OPENAI_API_KEY  — API key
 """
 
 import argparse
+import atexit
 import base64
 import json
 import os
@@ -31,37 +43,64 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 
+# Track temp files for cleanup
+_temp_files = []
+
+def _cleanup_temp():
+    for f in _temp_files:
+        try:
+            if os.path.exists(f):
+                os.unlink(f)
+        except OSError:
+            pass
+
+atexit.register(_cleanup_temp)
+
 DEFAULT_MODEL = "grok-imagine-video"
-OUTBOUND_DIR = os.environ.get("VIDEO_OUTBOUND_DIR", os.path.expanduser("~/.openclaw/workspace/outbound"))
+OUTBOUND_DIR = os.path.expanduser("~/.openclaw/workspace/outbound")
 POLL_INTERVAL = 5
 POLL_TIMEOUT = 600
-MAX_IMG_PX = 1280
-MAX_IMG_QUALITY = 85
+MAX_IMG_PX = 1280       # Cap image longest side before base64
+MAX_IMG_QUALITY = 85    # JPEG quality for processed images
 
-RATIO_MAP = {
+# Resolution pixel heights
+RES_PX = {"480p": 480, "720p": 720, "1080p": 1080}
+
+# Aspect ratio float values
+RATIO_VALUES = {
     "1:1": 1.0, "16:9": 16/9, "9:16": 9/16,
     "4:3": 4/3, "3:4": 3/4, "3:2": 3/2, "2:3": 2/3,
 }
 
+# Ratio mismatch threshold (>10% difference = mismatch)
+RATIO_MISMATCH_THRESHOLD = 0.10
+
 
 def get_env():
-    """Get and validate required environment variables. Falls back to OPENAI_* if VIDEO_* not set."""
-    base = os.environ.get("VIDEO_API_BASE") or os.environ.get("OPENAI_BASE_URL", "")
-    key = os.environ.get("VIDEO_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
+    """Get and validate required environment variables."""
+    base = os.environ.get("OPENAI_BASE_URL", "")
+    key = os.environ.get("OPENAI_API_KEY", "")
     if not base:
-        print("ERROR: Neither VIDEO_API_BASE nor OPENAI_BASE_URL env var is set.", file=sys.stderr)
+        print("ERROR: OPENAI_BASE_URL env var not set.", file=sys.stderr)
         sys.exit(1)
     if not key:
-        print("ERROR: Neither VIDEO_API_KEY nor OPENAI_API_KEY env var is set.", file=sys.stderr)
+        print("ERROR: OPENAI_API_KEY env var not set.", file=sys.stderr)
         sys.exit(1)
     return base.rstrip("/"), key
 
 
+_imagemagick_available = None
+
 def has_imagemagick() -> bool:
-    return subprocess.run(["which", "convert"], capture_output=True).returncode == 0
+    """Check if ImageMagick is available (cached)."""
+    global _imagemagick_available
+    if _imagemagick_available is None:
+        _imagemagick_available = subprocess.run(["which", "convert"], capture_output=True).returncode == 0
+    return _imagemagick_available
 
 
 def get_image_dimensions(path: str) -> tuple:
+    """Get image width and height using ImageMagick identify."""
     try:
         result = subprocess.run(
             ["identify", "-format", "%w %h", path],
@@ -74,8 +113,8 @@ def get_image_dimensions(path: str) -> tuple:
         return None, None
 
 
-def process_image(path: str, target_ratio: str = None, max_px: int = MAX_IMG_PX) -> str:
-    """Process image: fit to aspect ratio + cap resolution."""
+def process_image(path: str, max_px: int = MAX_IMG_PX) -> str:
+    """Process image: resize if too large. Returns path to processed image."""
     if not os.path.isfile(path):
         print(f"ERROR: Image not found: {path}", file=sys.stderr)
         sys.exit(1)
@@ -88,52 +127,23 @@ def process_image(path: str, target_ratio: str = None, max_px: int = MAX_IMG_PX)
     if w is None:
         return path
 
-    needs_ratio_fit = False
-    needs_resize = False
+    ratio = w / h
+    print(f"  Image: {w}x{h} (ratio {ratio:.2f})", file=sys.stderr)
 
-    if target_ratio and target_ratio in RATIO_MAP:
-        target_r = RATIO_MAP[target_ratio]
-        current_r = w / h
-        if abs(current_r - target_r) / max(current_r, target_r) >= 0.02:
-            needs_ratio_fit = True
-
-    if max(w, h) > max_px:
-        needs_resize = True
-
-    if not needs_ratio_fit and not needs_resize:
+    # Only resize if too large
+    if max(w, h) <= max_px:
         return path
 
     tmp = f"/tmp/_vid_img_processed_{os.getpid()}.jpg"
-    steps = []
+    _temp_files.append(tmp)
 
     try:
-        cmd = ["convert", path]
-
-        if needs_resize:
-            cmd.extend(["-resize", f"{max_px}x{max_px}>"])
-            steps.append(f"resize ≤{max_px}px")
-
-        if needs_ratio_fit:
-            target_r = RATIO_MAP[target_ratio]
-            ew = min(w, max_px) if needs_resize and w > h else (min(h, max_px) * w // h if needs_resize else w)
-            eh = min(h, max_px) if needs_resize and h >= w else (min(w, max_px) * h // w if needs_resize else h)
-
-            if ew / eh > target_r:
-                new_w = ew
-                new_h = int(round(ew / target_r))
-            else:
-                new_h = eh
-                new_w = int(round(eh * target_r))
-            new_w += new_w % 2
-            new_h += new_h % 2
-            cmd.extend(["-gravity", "center", "-background", "black", "-extent", f"{new_w}x{new_h}"])
-            steps.append(f"pad to {target_ratio}")
-
-        cmd.extend(["-quality", str(MAX_IMG_QUALITY), tmp])
+        cmd = ["convert", path, "-resize", f"{max_px}x{max_px}>",
+               "-quality", str(MAX_IMG_QUALITY), tmp]
         subprocess.run(cmd, check=True, capture_output=True)
 
         new_size = os.path.getsize(tmp) // 1024
-        print(f"  Processed {Path(path).name}: {', '.join(steps)} → {new_size}KB", file=sys.stderr)
+        print(f"  Resized {Path(path).name}: {w}x{h} → ≤{max_px}px ({new_size}KB)", file=sys.stderr)
         return tmp
 
     except Exception as e:
@@ -141,7 +151,125 @@ def process_image(path: str, target_ratio: str = None, max_px: int = MAX_IMG_PX)
         return path
 
 
+def find_nearest_ratio(img_ratio: float) -> str:
+    """Find the nearest supported aspect ratio string for a given ratio."""
+    best = min(RATIO_VALUES.items(), key=lambda kv: abs(kv[1] - img_ratio))
+    return best[0]
+
+
+def analyze_ratio(image_path: str, target_ratio: str) -> dict:
+    """Analyze image vs target ratio, recommend crop or outpaint.
+
+    Returns dict with:
+      - action: 'none' | 'crop' | 'outpaint'
+      - reason: human-readable explanation
+      - img_w, img_h, img_ratio: source image info
+      - target_ratio_str, target_ratio_val: target info
+      - crop_box: (left, top, right, bottom) if action=crop
+      - nearest_ratio: closest supported ratio to image
+    """
+    w, h = get_image_dimensions(image_path)
+    if w is None:
+        return {"action": "none", "reason": "Cannot read image dimensions"}
+
+    img_ratio = w / h
+    target_val = RATIO_VALUES.get(target_ratio)
+    if target_val is None:
+        return {"action": "none", "reason": f"Unknown target ratio: {target_ratio}"}
+
+    nearest = find_nearest_ratio(img_ratio)
+    mismatch = abs(img_ratio - target_val) / max(img_ratio, target_val)
+
+    result = {
+        "img_w": w, "img_h": h, "img_ratio": round(img_ratio, 3),
+        "target_ratio_str": target_ratio, "target_ratio_val": round(target_val, 3),
+        "nearest_ratio": nearest, "mismatch_pct": round(mismatch * 100, 1),
+    }
+
+    # No mismatch — image already matches target
+    if mismatch <= RATIO_MISMATCH_THRESHOLD:
+        result["action"] = "none"
+        result["reason"] = f"Image ratio {img_ratio:.2f} matches target {target_ratio} (mismatch {mismatch*100:.0f}%)"
+        return result
+
+    # Try crop: can we crop to target ratio without losing too much?
+    if img_ratio > target_val:
+        # Image is wider than target — crop width
+        new_w = int(h * target_val)
+        crop_left = (w - new_w) // 2
+        crop_box = (crop_left, 0, crop_left + new_w, h)
+        lost_pct = (w - new_w) / w * 100
+    else:
+        # Image is taller than target — crop height
+        new_h = int(w / target_val)
+        crop_top = (h - new_h) // 2
+        crop_box = (0, crop_top, w, crop_top + new_h)
+        lost_pct = (h - new_h) / h * 100
+
+    # Crop is safe if we lose ≤50% and the remaining area is reasonable
+    # (product is usually centered, so center crop works)
+    if lost_pct <= 50:
+        result["action"] = "crop"
+        result["crop_box"] = crop_box
+        result["crop_lost_pct"] = round(lost_pct, 1)
+        result["reason"] = (
+            f"Crop recommended: {w}x{h} → {crop_box[2]-crop_box[0]}x{crop_box[3]-crop_box[1]} "
+            f"(lose {lost_pct:.0f}% {'width' if img_ratio > target_val else 'height'}). "
+            f"Product at center should be preserved."
+        )
+    else:
+        result["action"] = "outpaint"
+        result["crop_lost_pct"] = round(lost_pct, 1)
+        result["reason"] = (
+            f"Outpaint recommended: crop would lose {lost_pct:.0f}% {'width' if img_ratio > target_val else 'height'} "
+            f"(too aggressive). AI extend is safer but may alter product details slightly."
+        )
+
+    return result
+
+
+def crop_image(image_path: str, target_ratio: str) -> str:
+    """Center-crop image to target aspect ratio. Returns path to cropped image."""
+    w, h = get_image_dimensions(image_path)
+    if w is None:
+        return image_path
+
+    target_val = RATIO_VALUES.get(target_ratio)
+    if target_val is None:
+        return image_path
+
+    img_ratio = w / h
+    if abs(img_ratio - target_val) / max(img_ratio, target_val) <= RATIO_MISMATCH_THRESHOLD:
+        print(f"  Crop skipped: ratio already matches", file=sys.stderr)
+        return image_path
+
+    if img_ratio > target_val:
+        new_w = int(h * target_val)
+        new_w += new_w % 2  # even
+        offset = (w - new_w) // 2
+        geometry = f"{new_w}x{h}+{offset}+0"
+    else:
+        new_h = int(w / target_val)
+        new_h += new_h % 2  # even
+        offset = (h - new_h) // 2
+        geometry = f"{w}x{new_h}+0+{offset}"
+
+    tmp = f"/tmp/_vid_img_cropped_{os.getpid()}.jpg"
+    _temp_files.append(tmp)
+    try:
+        cmd = ["convert", image_path, "-crop", geometry, "+repage",
+               "-quality", str(MAX_IMG_QUALITY), tmp]
+        subprocess.run(cmd, check=True, capture_output=True)
+        cw, ch = get_image_dimensions(tmp)
+        print(f"  Cropped: {w}x{h} → {cw}x{ch} (target {target_ratio})", file=sys.stderr)
+        return tmp
+    except Exception as e:
+        print(f"WARNING: Crop failed: {e}. Sending as-is.", file=sys.stderr)
+        return image_path
+
+
 def encode_image(path: str) -> str:
+    """Encode image file as base64 data URI."""
     with open(path, "rb") as f:
         img_bytes = f.read()
     b64 = base64.b64encode(img_bytes).decode()
@@ -151,6 +279,7 @@ def encode_image(path: str) -> str:
 
 
 def encode_video(path: str) -> str:
+    """Encode video file as base64 data URI."""
     if not os.path.isfile(path):
         print(f"ERROR: Video not found: {path}", file=sys.stderr)
         sys.exit(1)
@@ -165,6 +294,7 @@ def encode_video(path: str) -> str:
 
 
 def make_output_path(output: str, suffix: str = "") -> str:
+    """Generate output path with timestamp."""
     if output:
         return output
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -172,15 +302,20 @@ def make_output_path(output: str, suffix: str = "") -> str:
     return os.path.join(OUTBOUND_DIR, f"vid-{ts}{tag}.mp4")
 
 
-def api_request(url: str, api_key: str, method: str = "GET", data: dict = None) -> dict:
+def api_request(url: str, api_key: str, method: str = "GET", data: dict = None, timeout: int = 60) -> dict:
+    """Make an API request, return parsed JSON."""
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     body = json.dumps(data).encode() if data else None
+    if body:
+        size_kb = len(body) // 1024
+        if size_kb > 100:
+            print(f"  Payload: {size_kb}KB", file=sys.stderr)
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         error_body = e.read().decode() if e.fp else ""
@@ -191,25 +326,38 @@ def api_request(url: str, api_key: str, method: str = "GET", data: dict = None) 
         raise
 
 
-def download_video(url: str, output: str, timeout: int = 180):
+def download_video(url: str, output: str, timeout: int = 180, retries: int = 3):
+    """Download video from URL to local file with retry."""
     os.makedirs(os.path.dirname(output), exist_ok=True)
-    req = urllib.request.Request(url)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        with open(output, "wb") as f:
-            f.write(resp.read())
-    size_mb = os.path.getsize(output) / (1024 * 1024)
-    print(f"  Downloaded: {size_mb:.1f}MB", file=sys.stderr)
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                with open(output, "wb") as f:
+                    f.write(resp.read())
+            size_mb = os.path.getsize(output) / (1024 * 1024)
+            print(f"  Downloaded: {size_mb:.1f}MB", file=sys.stderr)
+            return
+        except Exception as e:
+            if attempt < retries:
+                wait = 5 * attempt
+                print(f"  Download failed (attempt {attempt}): {e}. Retrying in {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+            else:
+                print(f"ERROR: Download failed after {retries} attempts: {e}", file=sys.stderr)
+                raise
 
 
 def submit_and_poll(base_url: str, api_key: str, endpoint: str, payload: dict,
                     output: str, mode_label: str, json_output: bool = False) -> str:
+    """Submit request, poll for completion, download result. Returns output path."""
     t0 = time.time()
     result = None
 
     for attempt in range(1, 4):
         print(f"[Submit attempt {attempt}] POST {endpoint}", file=sys.stderr)
         try:
-            result = api_request(endpoint, api_key, method="POST", data=payload)
+            result = api_request(endpoint, api_key, method="POST", data=payload, timeout=120)
             break
         except Exception as e:
             if attempt < 3:
@@ -226,6 +374,7 @@ def submit_and_poll(base_url: str, api_key: str, endpoint: str, payload: dict,
         sys.exit(1)
     print(f"  request_id: {request_id}", file=sys.stderr)
 
+    # Poll
     poll_url = f"{base_url}/videos/{request_id}"
     poll_count = 0
     max_polls = POLL_TIMEOUT // POLL_INTERVAL
@@ -238,7 +387,9 @@ def submit_and_poll(base_url: str, api_key: str, endpoint: str, payload: dict,
         try:
             status_result = api_request(poll_url, api_key)
         except Exception:
-            print(f"  [Poll {poll_count}] Failed to check status, retrying...", file=sys.stderr)
+            backoff = min(POLL_INTERVAL * 2, 15)
+            print(f"  [Poll {poll_count}] Failed to check status, backoff {backoff}s...", file=sys.stderr)
+            time.sleep(backoff)
             continue
 
         status = status_result.get("status", "unknown")
@@ -288,6 +439,7 @@ def submit_and_poll(base_url: str, api_key: str, endpoint: str, payload: dict,
 
 
 def cmd_generate(args):
+    """Handle generate mode: text-to-video, image-to-video, reference-to-video."""
     base_url, api_key = get_env()
 
     if args.image and args.refs:
@@ -306,7 +458,11 @@ def cmd_generate(args):
     mode = "text-to-video"
     if args.image:
         mode = "image-to-video"
-        processed = process_image(args.image, target_ratio=args.aspect_ratio, max_px=MAX_IMG_PX)
+        img_path = args.image
+        # Auto-crop if requested
+        if args.crop:
+            img_path = crop_image(img_path, args.aspect_ratio)
+        processed = process_image(img_path, max_px=MAX_IMG_PX)
         payload["image"] = {"url": encode_image(processed)}
         if not args.prompt:
             mode = "image-to-video-auto"
@@ -339,6 +495,7 @@ def cmd_generate(args):
 
 
 def cmd_edit(args):
+    """Handle edit mode: edit existing video by prompt."""
     base_url, api_key = get_env()
 
     if not args.video:
@@ -367,6 +524,7 @@ def cmd_edit(args):
 
 
 def cmd_extend(args):
+    """Handle extend mode: extend existing video."""
     base_url, api_key = get_env()
 
     if not args.video:
@@ -376,7 +534,7 @@ def cmd_extend(args):
         print("ERROR: --prompt is required for extend mode.", file=sys.stderr)
         sys.exit(1)
 
-    ext_duration = min(args.duration, 10)
+    ext_duration = min(args.duration, 10)  # Extension max 10s
     if args.duration > 10:
         print(f"WARNING: Extension max 10s. Clamped from {args.duration}s.", file=sys.stderr)
 
@@ -421,11 +579,24 @@ if __name__ == "__main__":
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Model (default: {DEFAULT_MODEL})")
     parser.add_argument("--json", action="store_true", help="Output result as JSON")
     parser.add_argument("--dry-run", action="store_true", help="Validate params without calling API")
+    parser.add_argument("--analyze", action="store_true",
+                        help="Analyze image ratio vs target and recommend crop/outpaint (no generation)")
+    parser.add_argument("--crop", action="store_true",
+                        help="Auto center-crop image to target aspect ratio before generating")
     args = parser.parse_args()
 
+    # Validate duration range
     if args.mode == "generate" and not (1 <= args.duration <= 15):
         parser.error("Duration must be 1-15 for generate mode")
     if args.mode == "extend" and not (1 <= args.duration <= 10):
         parser.error("Duration must be 1-10 for extend mode")
+
+    # Handle --analyze: ratio analysis only, no generation
+    if args.analyze:
+        if not args.image:
+            parser.error("--analyze requires --image")
+        result = analyze_ratio(args.image, args.aspect_ratio)
+        print(json.dumps(result, indent=2))
+        sys.exit(0)
 
     {"generate": cmd_generate, "edit": cmd_edit, "extend": cmd_extend}[args.mode](args)
