@@ -114,16 +114,16 @@
     "slug": "am-image-gen-skill",
     "name": "image-gen-skill",
     "repo_path": "am-image-gen-skill",
-    "version": "1.2.0",
+    "version": "2.6.1",
     "author_name": "khoidoan",
-    "description": "Generate professional images: logo, banner, product photography, model+product, mockup. Exec-safe, fallback to OPENAI_* env vars."
+    "description": "Generate professional images: logo, banner, product photography, model+product, mockup. Delivery enforcement, PROGRESS/FAILED markers, LLM text rendering."
   },
   {
     "slug": "am-video-gen-skill",
     "name": "video-gen-skill",
     "repo_path": "am-video-gen-skill",
-    "version": "2.6.0",
+    "version": "2.7.1",
     "author_name": "khoidoan",
-    "description": "Generate, edit, and extend short videos using xAI grok-imagine-video. 5 modes: text-to-video, image-to-video, reference-to-video, video editing, video extension."
+    "description": "Generate, edit, and extend short videos using xAI grok-imagine-video + Seedance 2.0. 5 modes + Seedance fallback. Delivery enforcement, PROGRESS/FAILED markers."
   }
 ]

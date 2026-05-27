@@ -1,6 +1,6 @@
 ---
 name: am-video-gen-skill
-version: 2.6.0
+version: 2.7.1
 author: khoidoan
 description: >
   Generate, edit, and extend short videos using xAI grok-imagine-video.
@@ -11,6 +11,24 @@ description: >
 ---
 
 # Video Generation Skill
+
+## 🔴 Critical Rule — ALWAYS Deliver Result
+
+**Script `generate.py` chạy xong = BẮT BUỘC gọi `SendMessage` gửi video cho user NGAY trong cùng turn.**
+- KHÔNG kết thúc turn mà chưa gửi video
+- KHÔNG để user phải hỏi lại "video đâu?"
+- Nếu fail → vẫn phải báo user lỗi gì, KHÔNG im lặng
+
+**🔴 Retry & Progress — KHÔNG chờ user hỏi:**
+- Script fail/retry → **báo user ngay** "API lỗi, đang retry..."
+- All retries fail → **báo user ngay** lỗi cụ thể + đề xuất hướng khác
+- Video gen > 3 phút chưa có kết quả → báo user "Đang chờ API, lâu hơn bình thường"
+- KHÔNG im lặng chờ xong mới nói
+
+**Script stdout markers:**
+- `PROGRESS: ...` → **Báo user ngay** đang retry/chờ
+- `FAILED: ...` → **Báo user ngay** lỗi gì + đề xuất
+- `/path/to/output.mp4` → **Gửi video ngay** qua SendMessage
 
 ## Load Strategy
 
@@ -59,9 +77,11 @@ python3 skills/am-video-gen-skill/scripts/generate.py \
 - `--image` và `--refs` KHÔNG dùng cùng lúc
 - Edit/extend KHÔNG hỗ trợ custom duration/ratio/res — inherits từ input video
 - Extension max 10s (auto-clamped)
-- Luôn dùng `scripts/generate.py`, KHÔNG dùng `VideoCreate` built-in
+- Luôn dùng `scripts/generate.py` hoặc `scripts/seedance.py`, KHÔNG dùng `VideoCreate` built-in
 
-**⚙️ Required env vars:** `OPENAI_BASE_URL` + `OPENAI_API_KEY`
+**⚙️ Required env vars:**
+- **grok-imagine-video:** `OPENAI_BASE_URL` + `OPENAI_API_KEY`
+- **Seedance 2.0:** `ARK_API_KEY` + `BYTEPLUS_ARK_BASE_URL` + `SEEDANCE_MODEL` + `SEEDANCE_FAST_MODEL`
 
 **⏱️ Timing:**
 - Text-to-video: ~60-90s (5s) / ~120-180s (10s) / ~180-240s (15s)
@@ -81,19 +101,60 @@ python3 skills/am-video-gen-skill/scripts/generate.py \
 | 720p | ~720p | Cân bằng ✅ | **Mặc định — đủ cho social media** |
 | 1080p | ~1080p | Chậm hơn ~50% | Presentation, website hero |
 
-**📁 User images:** `ls -lt /root/.openclaw/media/inbound/ | head -5`
+**📁 User images:** `ls -lt ~/.openclaw/media/inbound/ | head -5`
+
+## Tool: `scripts/seedance.py` (Seedance 2.0 — Alternative)
+
+**Khi nào dùng Seedance thay grok-imagine-video:**
+- grok timeout/fail liên tục → chuyển Seedance làm fallback
+- User yêu cầu nhanh (fast model ~40s vs grok ~90s)
+- User muốn 1080p (Seedance 1080p ổn định hơn)
+
+```bash
+python3 skills/am-video-gen-skill/scripts/seedance.py \
+  --prompt "..." \
+  --duration 5 \
+  --aspect-ratio 9:16 \
+  --resolution 720p \
+  [--image photo.jpg] \
+  [--fast]
+```
+
+| Param | Values | Note |
+|-------|--------|------|
+| `--prompt` | English string | Required |
+| `--duration` | `5` \| `10` \| `15` | Only these 3 values |
+| `--aspect-ratio` | Same as grok | Default: `16:9` |
+| `--resolution` | `480p`\|`720p`\|`1080p` | Default: `720p` |
+| `--image` | File path | Image-to-video |
+| `--fast` | flag | Fast model (~40s vs ~108s) |
+| `--output` | File path | Default: `outbound/vid-TIMESTAMP-seedance.mp4` |
+| `--dry-run` | flag | Validate without calling API |
+
+**⚠️ Seedance limitations vs grok:**
+- KHÔNG có reference-to-video (`--refs`)
+- KHÔNG có edit/extend mode
+- Duration chỉ 3 giá trị (5/10/15), không tùy chỉnh
+- Text-to-video + image-to-video only
+- Requires ImageMagick for image-to-video (resize)
+
+**⚙️ Required env vars:** `ARK_API_KEY` + `BYTEPLUS_ARK_BASE_URL` + `SEEDANCE_MODEL` + `SEEDANCE_FAST_MODEL`
+
+**🔴 Text trong video:** Luôn tạo video KHÔNG text trước, overlay text sau (CapCut/Canva). Model render text sai gần như chắc chắn. Nếu user yêu cầu text → tư vấn overlay sau, KHÔNG thêm vào prompt.
 
 ---
 
 ## Flow
 
-### Step 0: Verify Images (if sent)
+### Step 0: Verify Input (images/video)
 
-**🔴 ALWAYS verify user images with `image` tool before building prompt.**
+**🔴 Images: ALWAYS verify with `image` tool before building prompt.**
 - `image(image=<path>, prompt="What is in this image?")` for EACH image
 - 1 ảnh + "animate" → `--image`
 - 1 ảnh + "style/nhân vật" → `--refs`
 - 2+ ảnh → `--refs` (hỏi thứ tự nếu chưa rõ)
+
+**Video (edit/extend):** Không preview được video inline — trust mô tả của user. Hỏi nếu cần: "Video gồm nội dung gì?"
 
 ### Step 0.5: Confirm Product Identity
 
@@ -137,7 +198,7 @@ python3 skills/am-video-gen-skill/scripts/generate.py \
 - SP giữ nguyên 100% chi tiết, chỉ cắt background
 - 0 cost thêm, 0 latency thêm
 
-**Outpaint** (khi crop không đủ):
+**Outpaint** (khi crop không đủ — requires `am-image-gen-skill` installed):
 ```bash
 # Bước 1: Extend canvas bằng gpt-image-2
 IMAGE_API_BASE="$OPENAI_BASE_URL" IMAGE_API_KEY="$OPENAI_API_KEY" \
@@ -260,8 +321,8 @@ Anh confirm em tạo nhé?
 
 ```bash
 cd ~/.openclaw/workspace && \
-OPENAI_BASE_URL="$HIP_IMAGE_BASE_URL" \
-OPENAI_API_KEY="$HIP_IMAGE_API_KEY" \
+OPENAI_BASE_URL="$OPENAI_BASE_URL" \
+OPENAI_API_KEY="$OPENAI_API_KEY" \
 python3 -u skills/am-video-gen-skill/scripts/generate.py \
   --mode <mode> \
   --prompt "<prompt>" \
@@ -276,9 +337,25 @@ python3 -u skills/am-video-gen-skill/scripts/generate.py \
 
 **🔴 Image-to-video: ALWAYS run `--analyze` first, add `--crop` if recommended.**
 
-**Flags:** `-u` = unbuffered progress. Env vars xem TOOLS.md "Hubcom LLM Proxy".
+**Flags:** `-u` = unbuffered progress. Set `OPENAI_BASE_URL` + `OPENAI_API_KEY` env vars.
 
-**After success:** `SendMessage(action=send, filePath=<output>, caption=<description>)`
+**🔴 MUST SEND RESULT — KHÔNG ĐƯỢC KẾT THÚC TURN MÀ CHƯA GỬI VIDEO:**
+
+Sau khi script in ra output path:
+1. **NGAY LẬP TỨC** gọi `SendMessage(action=send, filePath=<output path>, caption=<description>)`
+2. **Nếu SendMessage FAIL** (file quá lớn, timeout, Telegram reject):
+   a. Check file size: `ls -lh <output path>`
+   b. Nếu > 50MB → compress: `ffmpeg -i <path> -b:v 2M -maxrate 3M -bufsize 4M <compressed.mp4>` rồi gửi lại
+   c. Nếu vẫn fail → thử gửi bằng `asDocument: true`
+   d. Nếu tất cả fail → **BÁO USER NGAY**: "Video đã tạo xong nhưng gửi bị lỗi [chi tiết]. Đang thử lại..."
+   e. KHÔNG BAO GIỜ im lặng khi SendMessage fail
+3. Ask "Cần điều chỉnh gì không?"
+
+⚠️ **Anti-patterns (CẤM):**
+- Script chạy xong → agent kết thúc turn mà quên SendMessage → ĐÃ XẢY RA NHIỀU LẦN
+- Script retry → im lặng chờ → user không biết đang xảy ra gì
+- Script fail → không báo → user tưởng đang chạy
+- **SendMessage fail → im lặng** → video tạo xong nhưng user không nhận được
 
 **Error handling:**
 
@@ -291,6 +368,12 @@ python3 -u skills/am-video-gen-skill/scripts/generate.py \
 | 422 | Check image/video format |
 | 429 | Rate limit — wait 30-60s, retry |
 | 500/502/503 | Server error — retry 2-3x with backoff |
+| All retries failed | **Try Seedance fallback** (see below) |
+
+**🔄 Seedance Fallback:** Nếu grok-imagine-video fail 3 lần liên tiếp:
+1. Báo user: "API grok đang lỗi, em chuyển sang Seedance (nhanh hơn). OK?"
+2. User confirm → chạy `seedance.py` với cùng prompt + params tương đương
+3. Lưu ý: Seedance KHÔNG có edit/extend/refs → nếu mode không tương thích, báo user
 
 ### Step 6b: Post-Process (Optional)
 
@@ -340,7 +423,7 @@ ffmpeg -i input.mp4 -t 3 -vf "fps=12,scale=480:-1" -loop 0 output.gif
 | Close-up tay | "Hay bị artifact, medium shot an toàn hơn" |
 | Muốn video dài hơn 15s | "Generate 15s + extend thêm 10s = 25s tổng" |
 | Edit nhưng đổi quá nhiều | "Edit chỉ sửa nhẹ (thêm/đổi element). Đổi nhiều → generate mới" |
-| Ảnh vuông → video 9:16 | "Ảnh 1:1 mà output 9:16 sẽ bị stretch. Dùng 1:1 giữ đúng SP, hoặc chấp nhận biến dạng nhẹ" |
+| Ảnh vuông → video 9:16 | "Em chạy `--analyze` check trước. Crop hoặc outpaint để fit ratio, không bị stretch" |
 | Muốn series video | "Tạo từng video riêng, giữ prompt style nhất quán. Extend nối thêm 10s nếu cần" |
 
 ---
@@ -354,6 +437,31 @@ ffmpeg -i input.mp4 -t 3 -vf "fps=12,scale=480:-1" -loop 0 output.gif
 | Instagram post | 1:1 | 5-10s |
 
 ## Changelog
+
+### v2.7.1 (2026-05-27)
+- **3-round review:** Logic + Simulation + Adversarial
+- **Fix:** `shutil.which()` replaces `subprocess which` (portable)
+- **Fix:** PNG format preserved in resize/crop (transparency for logos)
+- **Fix:** Video MIME detection by extension (mp4/mov/webm/avi/mkv)
+- **Fix:** HTTP 429 rate limit handling with 30s backoff in submit
+- **Fix:** `$HIP_IMAGE_*` env vars → generic `$OPENAI_*`
+- **Improve:** Seedance section moved next to generate.py (better doc order)
+- **Improve:** Seedance fallback decision tree in error handling
+- **Improve:** Step 0 video edit/extend guidance (can't preview inline)
+- **Improve:** Outpaint notes dependency on am-image-gen-skill
+- **Improve:** Updated proactive advice for ratio mismatch (crop/outpaint)
+
+### v2.7.0 (2026-05-27)
+- **Critical Rule:** Delivery enforcement — MUST SendMessage after generate, never end turn silently
+- **Seedance 2.0:** Alt engine documented (text/image-to-video, fast mode ~40s) + `scripts/seedance.py`
+- **Text overlay rule:** Always render video without text, overlay later
+- **PROGRESS/FAILED markers:** stdout markers for agent to notify user
+- **SendMessage fail handling:** compress (ffmpeg) → asDocument → notify user
+- **Anti-patterns:** 4 banned patterns documented
+
+### v2.6.0 (2026-05-26)
+- Delivery enforcement, PROGRESS/FAILED stdout markers in generate.py
+- SendMessage fail handling, anti-patterns
 
 ### v2.5.0 (2026-05-21)
 - **Improve:** Submit timeout 60s→120s (large payload support for video/image base64)

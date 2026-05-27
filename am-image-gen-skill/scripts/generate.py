@@ -14,15 +14,30 @@ Env vars (priority: IMAGE_* > OPENAI_*):
 """
 
 import argparse
+import atexit
 import base64
 import json
 import os
+import shutil
 import sys
 import time
 import urllib.request
 import subprocess
 from pathlib import Path
 from datetime import datetime
+
+# Track temp files for cleanup
+_temp_files = []
+
+def _cleanup_temp():
+    for f in _temp_files:
+        try:
+            if os.path.exists(f):
+                os.unlink(f)
+        except OSError:
+            pass
+
+atexit.register(_cleanup_temp)
 
 DEFAULT_MODEL = "gpt-image-2"
 OUTBOUND_DIR = os.environ.get("IMAGE_OUTBOUND_DIR", os.path.expanduser("~/.openclaw/workspace/outbound"))
@@ -34,47 +49,59 @@ TIMEOUT = 180              # seconds per attempt
 MAX_RETRIES = 2            # retry up to 2 times on failure
 
 
+def fail(msg: str):
+    """Print FAILED marker to stdout and exit. Agent MUST notify user."""
+    print(f"FAILED: {msg}")
+    sys.stdout.flush()
+    sys.exit(1)
+
+
+def progress(msg: str):
+    """Print PROGRESS marker to stdout. Agent SHOULD notify user."""
+    print(f"PROGRESS: {msg}")
+    sys.stdout.flush()
+
+
 def validate_env():
     """Check required environment variables. Falls back to OPENAI_* if IMAGE_* not set."""
     base = os.environ.get("IMAGE_API_BASE") or os.environ.get("OPENAI_BASE_URL", "")
     key = os.environ.get("IMAGE_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
     if not base:
-        print("ERROR: Neither IMAGE_API_BASE nor OPENAI_BASE_URL env var is set.", file=sys.stderr)
-        print("  Set IMAGE_API_BASE or OPENAI_BASE_URL to your OpenAI-compatible API base URL.", file=sys.stderr)
-        sys.exit(1)
+        fail("ENV_MISSING - Neither IMAGE_API_BASE nor OPENAI_BASE_URL env var is set.")
     if not key:
-        print("ERROR: Neither IMAGE_API_KEY nor OPENAI_API_KEY env var is set.", file=sys.stderr)
-        sys.exit(1)
+        fail("ENV_MISSING - Neither IMAGE_API_KEY nor OPENAI_API_KEY env var is set.")
     return base, key
 
 
 def validate_images(paths: list) -> list:
-    """Validate image paths exist and are readable."""
+    """Validate image paths exist and are readable. Exit with clear error if not."""
     valid = []
     for p in paths:
         if not os.path.isfile(p):
-            print(f"ERROR: Image not found: {p}", file=sys.stderr)
-            print(f"  Hint: check your media inbound directory for recent uploads", file=sys.stderr)
-            sys.exit(1)
+            fail(f"IMAGE_NOT_FOUND - {p}")
         size_kb = os.path.getsize(p) / 1024
         if size_kb < 1:
-            print(f"ERROR: Image too small (possibly empty): {p} ({size_kb:.1f}KB)", file=sys.stderr)
-            sys.exit(1)
+            fail(f"IMAGE_EMPTY - {p} ({size_kb:.1f}KB)")
         valid.append(p)
     return valid
 
 
 def resize_image(path: str, max_px: int) -> bytes:
-    """Resize image to max_px on longest side, return JPEG bytes."""
-    if not subprocess.run(["which", "convert"], capture_output=True).returncode == 0:
+    """Resize image to max_px on longest side. Preserves PNG format for transparency."""
+    if not shutil.which("convert"):
         print("WARNING: ImageMagick 'convert' not found. Sending image as-is.", file=sys.stderr)
         with open(path, "rb") as f:
             return f.read()
-    tmp = "/tmp/_img_resize.jpg"
-    subprocess.run(
-        ["convert", path, "-resize", f"{max_px}x{max_px}>", "-quality", "75", tmp],
-        check=True, capture_output=True
-    )
+    ext = Path(path).suffix.lower()
+    is_png = ext == ".png"
+    out_ext = "png" if is_png else "jpg"
+    tmp = f"/tmp/_img_resize_{os.getpid()}.{out_ext}"
+    _temp_files.append(tmp)
+    cmd = ["convert", path, "-resize", f"{max_px}x{max_px}>"]
+    if not is_png:
+        cmd += ["-quality", "75"]
+    cmd.append(tmp)
+    subprocess.run(cmd, check=True, capture_output=True)
     with open(tmp, "rb") as f:
         return f.read()
 
@@ -105,7 +132,7 @@ def make_output_path(output: str, fmt: str) -> str:
 
 def generate(prompt: str, size: str, images: list = None, quality: str = "high",
              background: str = None, output: str = None, fmt: str = None, model: str = None,
-             count: int = 1):
+             count: int = 1, dry_run: bool = False):
     base_url, api_key = validate_env()
     model_name = model or DEFAULT_MODEL
 
@@ -140,6 +167,13 @@ def generate(prompt: str, size: str, images: list = None, quality: str = "high",
     data = json.dumps(payload).encode()
     payload_kb = len(data) // 1024
 
+    if dry_run:
+        dry_payload = {k: ("<base64 images>" if k == "images" else v) for k, v in payload.items()}
+        print(f"[DRY RUN] {endpoint}", file=sys.stderr)
+        print(f"[DRY RUN] {json.dumps(dry_payload, indent=2)}", file=sys.stderr)
+        print("DRY_RUN_OK")
+        return
+
     if payload_kb > MAX_PAYLOAD_WARN_KB:
         print(f"  ⚠️ Payload large ({payload_kb}KB) — may timeout with multiple images", file=sys.stderr)
 
@@ -165,25 +199,36 @@ def generate(prompt: str, size: str, images: list = None, quality: str = "high",
             elapsed = time.time() - t0
             print(f"  Response in {elapsed:.1f}s", file=sys.stderr)
             break
+        except urllib.error.HTTPError as e:
+            elapsed = time.time() - t0
+            error_body = e.read().decode()[:300] if e.fp else ""
+            print(f"  HTTP {e.code} after {elapsed:.1f}s: {error_body}", file=sys.stderr)
+            if e.code == 429:
+                wait = 30  # Rate limit — longer backoff
+                progress(f"Rate limited (429). Waiting {wait}s... (attempt {attempt}/{MAX_RETRIES+1})")
+                time.sleep(wait)
+            elif attempt <= MAX_RETRIES:
+                wait = 5 * attempt
+                progress(f"Attempt {attempt} failed (HTTP {e.code}). Retrying in {wait}s... (attempt {attempt+1}/{MAX_RETRIES+1})")
+                time.sleep(wait)
+            else:
+                fail(f"All {MAX_RETRIES + 1} attempts failed. Last error: HTTP {e.code} {error_body[:200]}")
         except Exception as e:
             elapsed = time.time() - t0
             print(f"  FAILED after {elapsed:.1f}s: {e}", file=sys.stderr)
             if attempt <= MAX_RETRIES:
                 wait = 5 * attempt
-                print(f"  Retrying in {wait}s...", file=sys.stderr)
+                progress(f"Attempt {attempt} failed ({e}). Retrying in {wait}s... (attempt {attempt+1}/{MAX_RETRIES+1})")
                 time.sleep(wait)
             else:
-                print(f"ERROR: All {MAX_RETRIES + 1} attempts failed.", file=sys.stderr)
-                sys.exit(1)
+                fail(f"All {MAX_RETRIES + 1} attempts failed. Last error: {e}")
 
     if not result or "data" not in result or not result["data"]:
         error_msg = json.dumps(result)[:500] if result else "No response"
         if "content_policy" in error_msg.lower() or "safety" in error_msg.lower():
-            print(f"CONTENT_POLICY: Prompt rejected by safety filter.", file=sys.stderr)
-            print(f"  Fix: Remove brand names, reduce skin exposure, make descriptions generic.", file=sys.stderr)
+            fail(f"CONTENT_POLICY - Prompt bị chặn bởi bộ lọc an toàn. Cần sửa prompt.")
         else:
-            print(f"API ERROR: {error_msg}", file=sys.stderr)
-        sys.exit(1)
+            fail(f"API_ERROR - {error_msg}")
 
     # Save output(s)
     output_paths = []
@@ -208,8 +253,7 @@ def generate(prompt: str, size: str, images: list = None, quality: str = "high",
             print(out_path)
             print(f"  {size_mb:.1f}MB | from URL", file=sys.stderr)
         else:
-            print(f"UNEXPECTED RESPONSE: {list(img_data.keys())}", file=sys.stderr)
-            sys.exit(1)
+            fail(f"UNEXPECTED_RESPONSE - keys: {list(img_data.keys())}")
         output_paths.append(out_path)
 
     if count > 1:
@@ -227,6 +271,7 @@ if __name__ == "__main__":
     parser.add_argument("--format", choices=["png", "jpeg", "webp"], help="Output format")
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Model (default: {DEFAULT_MODEL})")
     parser.add_argument("--count", type=int, default=1, choices=[1, 2, 3, 4], help="Number of images (1-4)")
+    parser.add_argument("--dry-run", action="store_true", help="Validate params without calling API")
     args = parser.parse_args()
 
     generate(
@@ -239,4 +284,5 @@ if __name__ == "__main__":
         fmt=args.format,
         model=args.model,
         count=args.count,
+        dry_run=args.dry_run,
     )
