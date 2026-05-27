@@ -65,6 +65,7 @@ python3 <skill_path>/scripts/generate.py \
 | `--count` | `1` \| `2` \| `3` \| `4` | Generate multiple variations (default: 1) |
 | `--output` | File path | Default: `outbound/gen-TIMESTAMP.ext` |
 | `--model` | string | Default: `gpt-image-2` |
+| `--dry-run` | flag | Validate params without calling API |
 
 **Size mapping:** 1:1→`1024x1024` | 9:16,4:5→`1024x1792` | 16:9→`1792x1024`
 
@@ -84,8 +85,11 @@ python3 <skill_path>/scripts/generate.py \
 - Inform user: "Chờ em khoảng 1 phút nhé" trước khi generate
 
 **📁 Finding user's uploaded images:**
-User images land in the platform media inbound directory.
-To find the latest: `ls -lt <media_inbound_path>/ | head -5`
+User images land in the platform media inbound directory (typically `~/.openclaw/media/inbound/`).
+To find the latest:
+```bash
+ls -lt ~/.openclaw/media/inbound/ | head -5
+```
 
 **⚙️ Environment:**
 Script reads from env vars (priority: IMAGE_* > OPENAI_*):
@@ -194,8 +198,8 @@ Nếu user muốn sửa → quay lại Step 3/4 điều chỉnh → confirm lạ
 
 Run script (see Tool section above for full params):
 ```bash
-IMAGE_API_BASE="<proxy_base_url>" \
-IMAGE_API_KEY="<api_key>" \
+IMAGE_API_BASE="$IMAGE_API_BASE" \
+IMAGE_API_KEY="$IMAGE_API_KEY" \
 python3 <skill_path>/scripts/generate.py \
   --prompt "<prompt from Step 4>" \
   --size <size> --quality high \
@@ -330,3 +334,15 @@ Tips cho text chính xác:
 - `references/style-presets.md` — 25 presets with examples + industry mapping + aspect ratio table
 - `references/build-guide.md` — Category structures, A/B strategy, UC13-15 prompts
 - `references/conversation-examples.md` — 5 end-to-end flows
+
+## Changelog
+
+### v2.6.1 (2026-05-27)
+- **Critical Rule:** Delivery enforcement — MUST SendMessage after generate
+- **PROGRESS/FAILED markers:** `fail()`/`progress()` helpers in generate.py
+- **UC8 Text in Image:** LLM render approach (not manual ImageMagick overlay)
+- **SendMessage fail handling:** compress → asDocument → notify user
+- **Anti-patterns:** 4 banned patterns documented
+- **`--dry-run` flag:** Validate params without calling API
+- **Script hardening:** atexit temp cleanup, `shutil.which()`, pid-unique tmp files
+- Converted from hc-image-gen-skill v2.6.1
