@@ -36,6 +36,7 @@ import atexit
 import base64
 import json
 import os
+import shutil
 import sys
 import time
 import urllib.request
@@ -131,10 +132,10 @@ def has_imagemagick() -> bool:
     """Check if ImageMagick is available, auto-install if missing (cached)."""
     global _imagemagick_available
     if _imagemagick_available is None:
-        _imagemagick_available = subprocess.run(["which", "convert"], capture_output=True).returncode == 0
+        _imagemagick_available = shutil.which("convert") is not None
         if not _imagemagick_available:
             if _install_imagemagick():
-                _imagemagick_available = subprocess.run(["which", "convert"], capture_output=True).returncode == 0
+                _imagemagick_available = shutil.which("convert") is not None
     return _imagemagick_available
 
 
@@ -172,12 +173,17 @@ def process_image(path: str, max_px: int = MAX_IMG_PX) -> str:
     if max(w, h) <= max_px:
         return path
 
-    tmp = f"/tmp/_vid_img_processed_{os.getpid()}.jpg"
+    ext = Path(path).suffix.lower()
+    is_png = ext == ".png"
+    out_ext = "png" if is_png else "jpg"
+    tmp = f"/tmp/_vid_img_processed_{os.getpid()}.{out_ext}"
     _temp_files.append(tmp)
 
     try:
-        cmd = ["convert", path, "-resize", f"{max_px}x{max_px}>",
-               "-quality", str(MAX_IMG_QUALITY), tmp]
+        cmd = ["convert", path, "-resize", f"{max_px}x{max_px}>"]
+        if not is_png:
+            cmd += ["-quality", str(MAX_IMG_QUALITY)]
+        cmd.append(tmp)
         subprocess.run(cmd, check=True, capture_output=True)
 
         new_size = os.path.getsize(tmp) // 1024
@@ -292,11 +298,16 @@ def crop_image(image_path: str, target_ratio: str) -> str:
         offset = (h - new_h) // 2
         geometry = f"{w}x{new_h}+0+{offset}"
 
-    tmp = f"/tmp/_vid_img_cropped_{os.getpid()}.jpg"
+    ext = Path(image_path).suffix.lower()
+    is_png = ext == ".png"
+    out_ext = "png" if is_png else "jpg"
+    tmp = f"/tmp/_vid_img_cropped_{os.getpid()}.{out_ext}"
     _temp_files.append(tmp)
     try:
-        cmd = ["convert", image_path, "-crop", geometry, "+repage",
-               "-quality", str(MAX_IMG_QUALITY), tmp]
+        cmd = ["convert", image_path, "-crop", geometry, "+repage"]
+        if not is_png:
+            cmd += ["-quality", str(MAX_IMG_QUALITY)]
+        cmd.append(tmp)
         subprocess.run(cmd, check=True, capture_output=True)
         cw, ch = get_image_dimensions(tmp)
         print(f"  Cropped: {w}x{h} → {cw}x{ch} (target {target_ratio})", file=sys.stderr)
@@ -317,16 +328,19 @@ def encode_image(path: str) -> str:
 
 
 def encode_video(path: str) -> str:
-    """Encode video file as base64 data URI."""
+    """Encode video file as base64 data URI with correct MIME type."""
     if not os.path.isfile(path):
         fail(f"VIDEO_NOT_FOUND - {path}")
     size_mb = os.path.getsize(path) / (1024 * 1024)
     if size_mb > 100:
         fail(f"VIDEO_TOO_LARGE - {size_mb:.1f}MB (max 100MB)")
     print(f"  Encoding video: {size_mb:.1f}MB", file=sys.stderr)
+    ext = Path(path).suffix.lower().lstrip(".")
+    mime = {"mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm",
+            "avi": "video/x-msvideo", "mkv": "video/x-matroska"}.get(ext, "video/mp4")
     with open(path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
-    return f"data:video/mp4;base64,{b64}"
+    return f"data:{mime};base64,{b64}"
 
 
 def make_output_path(output: str, suffix: str = "") -> str:
@@ -394,6 +408,17 @@ def submit_and_poll(base_url: str, api_key: str, endpoint: str, payload: dict,
         try:
             result = api_request(endpoint, api_key, method="POST", data=payload, timeout=120)
             break
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                wait = 30  # Rate limit — longer backoff
+                progress(f"Rate limited (429). Waiting {wait}s... (attempt {attempt}/3)")
+                time.sleep(wait)
+            elif attempt < 3:
+                wait = 5 * attempt
+                progress(f"Submit attempt {attempt} failed (HTTP {e.code}). Retrying in {wait}s... (attempt {attempt+1}/3)")
+                time.sleep(wait)
+            else:
+                fail(f"SUBMIT_FAILED - After 3 attempts: HTTP {e.code}")
         except Exception as e:
             if attempt < 3:
                 wait = 5 * attempt
