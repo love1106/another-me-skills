@@ -39,27 +39,34 @@ def validate_env():
     base = os.environ.get("IMAGE_API_BASE") or os.environ.get("OPENAI_BASE_URL", "")
     key = os.environ.get("IMAGE_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
     if not base:
-        print("ERROR: Neither IMAGE_API_BASE nor OPENAI_BASE_URL env var is set.", file=sys.stderr)
-        print("  Set IMAGE_API_BASE or OPENAI_BASE_URL to your OpenAI-compatible API base URL.", file=sys.stderr)
-        sys.exit(1)
+        fail("ENV_MISSING - Neither IMAGE_API_BASE nor OPENAI_BASE_URL env var is set.")
     if not key:
-        print("ERROR: Neither IMAGE_API_KEY nor OPENAI_API_KEY env var is set.", file=sys.stderr)
-        sys.exit(1)
+        fail("ENV_MISSING - Neither IMAGE_API_KEY nor OPENAI_API_KEY env var is set.")
     return base, key
 
 
+def fail(msg: str):
+    """Print FAILED marker to stdout and exit. Agent MUST notify user."""
+    print(f"FAILED: {msg}")
+    sys.stdout.flush()
+    sys.exit(1)
+
+
+def progress(msg: str):
+    """Print PROGRESS marker to stdout. Agent SHOULD notify user."""
+    print(f"PROGRESS: {msg}")
+    sys.stdout.flush()
+
+
 def validate_images(paths: list) -> list:
-    """Validate image paths exist and are readable."""
+    """Validate image paths exist and are readable. Exit with clear error if not."""
     valid = []
     for p in paths:
         if not os.path.isfile(p):
-            print(f"ERROR: Image not found: {p}", file=sys.stderr)
-            print(f"  Hint: check your media inbound directory for recent uploads", file=sys.stderr)
-            sys.exit(1)
+            fail(f"IMAGE_NOT_FOUND - {p}")
         size_kb = os.path.getsize(p) / 1024
         if size_kb < 1:
-            print(f"ERROR: Image too small (possibly empty): {p} ({size_kb:.1f}KB)", file=sys.stderr)
-            sys.exit(1)
+            fail(f"IMAGE_EMPTY - {p} ({size_kb:.1f}KB)")
         valid.append(p)
     return valid
 
@@ -170,20 +177,19 @@ def generate(prompt: str, size: str, images: list = None, quality: str = "high",
             print(f"  FAILED after {elapsed:.1f}s: {e}", file=sys.stderr)
             if attempt <= MAX_RETRIES:
                 wait = 5 * attempt
-                print(f"  Retrying in {wait}s...", file=sys.stderr)
+                # PROGRESS marker — agent MUST notify user when seeing this
+                progress(f"Attempt {attempt} failed ({e}). Retrying in {wait}s... (attempt {attempt+1}/{MAX_RETRIES+1})")
                 time.sleep(wait)
             else:
-                print(f"ERROR: All {MAX_RETRIES + 1} attempts failed.", file=sys.stderr)
-                sys.exit(1)
+                # FINAL FAILURE marker — agent MUST notify user immediately
+                fail(f"All {MAX_RETRIES + 1} attempts failed. Last error: {e}")
 
     if not result or "data" not in result or not result["data"]:
         error_msg = json.dumps(result)[:500] if result else "No response"
         if "content_policy" in error_msg.lower() or "safety" in error_msg.lower():
-            print(f"CONTENT_POLICY: Prompt rejected by safety filter.", file=sys.stderr)
-            print(f"  Fix: Remove brand names, reduce skin exposure, make descriptions generic.", file=sys.stderr)
+            fail(f"CONTENT_POLICY - Prompt bị chặn bởi bộ lọc an toàn. Cần sửa prompt.")
         else:
-            print(f"API ERROR: {error_msg}", file=sys.stderr)
-        sys.exit(1)
+            fail(f"API_ERROR - {error_msg}")
 
     # Save output(s)
     output_paths = []
@@ -208,8 +214,7 @@ def generate(prompt: str, size: str, images: list = None, quality: str = "high",
             print(out_path)
             print(f"  {size_mb:.1f}MB | from URL", file=sys.stderr)
         else:
-            print(f"UNEXPECTED RESPONSE: {list(img_data.keys())}", file=sys.stderr)
-            sys.exit(1)
+            fail(f"UNEXPECTED_RESPONSE - keys: {list(img_data.keys())}")
         output_paths.append(out_path)
 
     if count > 1:

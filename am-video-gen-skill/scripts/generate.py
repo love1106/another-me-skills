@@ -76,16 +76,27 @@ RATIO_VALUES = {
 RATIO_MISMATCH_THRESHOLD = 0.10
 
 
+def fail(msg: str):
+    """Print FAILED marker to stdout and exit. Agent MUST notify user."""
+    print(f"FAILED: {msg}")
+    sys.stdout.flush()
+    sys.exit(1)
+
+
+def progress(msg: str):
+    """Print PROGRESS marker to stdout. Agent SHOULD notify user."""
+    print(f"PROGRESS: {msg}")
+    sys.stdout.flush()
+
+
 def get_env():
     """Get and validate required environment variables."""
     base = os.environ.get("OPENAI_BASE_URL", "")
     key = os.environ.get("OPENAI_API_KEY", "")
     if not base:
-        print("ERROR: OPENAI_BASE_URL env var not set.", file=sys.stderr)
-        sys.exit(1)
+        fail("ENV_MISSING - OPENAI_BASE_URL env var not set.")
     if not key:
-        print("ERROR: OPENAI_API_KEY env var not set.", file=sys.stderr)
-        sys.exit(1)
+        fail("ENV_MISSING - OPENAI_API_KEY env var not set.")
     base = base.rstrip("/")
     # Ensure base URL ends with /v1
     if not base.endswith("/v1"):
@@ -144,8 +155,7 @@ def get_image_dimensions(path: str) -> tuple:
 def process_image(path: str, max_px: int = MAX_IMG_PX) -> str:
     """Process image: resize if too large. Returns path to processed image."""
     if not os.path.isfile(path):
-        print(f"ERROR: Image not found: {path}", file=sys.stderr)
-        sys.exit(1)
+        fail(f"IMAGE_NOT_FOUND - {path}")
 
     if not has_imagemagick():
         print("WARNING: ImageMagick not found. Sending image as-is.", file=sys.stderr)
@@ -309,12 +319,10 @@ def encode_image(path: str) -> str:
 def encode_video(path: str) -> str:
     """Encode video file as base64 data URI."""
     if not os.path.isfile(path):
-        print(f"ERROR: Video not found: {path}", file=sys.stderr)
-        sys.exit(1)
+        fail(f"VIDEO_NOT_FOUND - {path}")
     size_mb = os.path.getsize(path) / (1024 * 1024)
     if size_mb > 100:
-        print(f"ERROR: Video too large ({size_mb:.1f}MB). Max ~100MB for base64.", file=sys.stderr)
-        sys.exit(1)
+        fail(f"VIDEO_TOO_LARGE - {size_mb:.1f}MB (max 100MB)")
     print(f"  Encoding video: {size_mb:.1f}MB", file=sys.stderr)
     with open(path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
@@ -372,8 +380,7 @@ def download_video(url: str, output: str, timeout: int = 180, retries: int = 3):
                 print(f"  Download failed (attempt {attempt}): {e}. Retrying in {wait}s...", file=sys.stderr)
                 time.sleep(wait)
             else:
-                print(f"ERROR: Download failed after {retries} attempts: {e}", file=sys.stderr)
-                raise
+                fail(f"DOWNLOAD_FAILED - After {retries} attempts: {e}")
 
 
 def submit_and_poll(base_url: str, api_key: str, endpoint: str, payload: dict,
@@ -390,16 +397,14 @@ def submit_and_poll(base_url: str, api_key: str, endpoint: str, payload: dict,
         except Exception as e:
             if attempt < 3:
                 wait = 5 * attempt
-                print(f"  Submit failed, retrying in {wait}s...", file=sys.stderr)
+                progress(f"Submit attempt {attempt} failed ({e}). Retrying in {wait}s... (attempt {attempt+1}/3)")
                 time.sleep(wait)
             else:
-                print(f"ERROR: Failed to submit after 3 attempts: {e}", file=sys.stderr)
-                sys.exit(1)
+                fail(f"SUBMIT_FAILED - After 3 attempts: {e}")
 
     request_id = result.get("request_id")
     if not request_id:
-        print(f"ERROR: No request_id in response: {json.dumps(result)[:300]}", file=sys.stderr)
-        sys.exit(1)
+        fail(f"NO_REQUEST_ID - Response: {json.dumps(result)[:300]}")
     print(f"  request_id: {request_id}", file=sys.stderr)
 
     # Poll
@@ -428,8 +433,7 @@ def submit_and_poll(base_url: str, api_key: str, endpoint: str, payload: dict,
             print(f"  [Poll {poll_count}] Done in {elapsed:.0f}s | Duration: {video_duration}s", file=sys.stderr)
 
             if not video_url:
-                print(f"ERROR: No video URL in response: {json.dumps(status_result)[:300]}", file=sys.stderr)
-                sys.exit(1)
+                fail(f"NO_VIDEO_URL - Response: {json.dumps(status_result)[:300]}")
 
             out_path = make_output_path(output, mode_label)
             download_video(video_url, out_path)
@@ -452,18 +456,19 @@ def submit_and_poll(base_url: str, api_key: str, endpoint: str, payload: dict,
         elif status in ("failed", "expired"):
             print(f"  [Poll {poll_count}] Status: {status} after {elapsed:.0f}s", file=sys.stderr)
             error_detail = json.dumps(status_result)[:500]
-            print(f"ERROR: Video generation {status}: {error_detail}", file=sys.stderr)
             if json_output:
                 print(json.dumps({"status": "error", "error": status, "detail": error_detail[:200]}))
-            sys.exit(1)
+            else:
+                fail(f"GEN_{status.upper()} - {error_detail[:200]}")
 
         else:
             if poll_count % 3 == 0:
                 print(f"  [Poll {poll_count}] Still generating... ({elapsed:.0f}s elapsed)", file=sys.stderr)
+            # Emit PROGRESS every 60s so agent can update user
+            if elapsed > 60 and poll_count % 12 == 0:
+                progress(f"Still generating... {elapsed:.0f}s elapsed. Video gen takes 1-5 min.")
 
-    elapsed = time.time() - t0
-    print(f"ERROR: Timeout after {elapsed:.0f}s ({max_polls} polls). request_id: {request_id}", file=sys.stderr)
-    sys.exit(1)
+    fail(f"TIMEOUT - {elapsed:.0f}s ({max_polls} polls). request_id: {request_id}")
 
 
 def cmd_generate(args):
@@ -471,8 +476,7 @@ def cmd_generate(args):
     base_url, api_key = get_env()
 
     if args.image and args.refs:
-        print("ERROR: Cannot use both --image and --refs. Pick one.", file=sys.stderr)
-        sys.exit(1)
+        fail("INVALID_ARGS - Cannot use both --image and --refs. Pick one.")
 
     payload = {
         "model": args.model,
@@ -500,8 +504,7 @@ def cmd_generate(args):
             {"url": encode_image(process_image(r, max_px=MAX_IMG_PX))} for r in args.refs
         ]
     elif not args.prompt:
-        print("ERROR: --prompt is required for text-to-video.", file=sys.stderr)
-        sys.exit(1)
+        fail("MISSING_PROMPT - --prompt is required for text-to-video.")
 
     print(f"Mode: {mode} | Duration: {args.duration}s | Ratio: {args.aspect_ratio} | Res: {args.resolution}", file=sys.stderr)
 
@@ -527,11 +530,9 @@ def cmd_edit(args):
     base_url, api_key = get_env()
 
     if not args.video:
-        print("ERROR: --video is required for edit mode.", file=sys.stderr)
-        sys.exit(1)
+        fail("MISSING_VIDEO - --video is required for edit mode.")
     if not args.prompt:
-        print("ERROR: --prompt is required for edit mode.", file=sys.stderr)
-        sys.exit(1)
+        fail("MISSING_PROMPT - --prompt is required for edit mode.")
 
     payload = {
         "model": args.model,
@@ -556,11 +557,9 @@ def cmd_extend(args):
     base_url, api_key = get_env()
 
     if not args.video:
-        print("ERROR: --video is required for extend mode.", file=sys.stderr)
-        sys.exit(1)
+        fail("MISSING_VIDEO - --video is required for extend mode.")
     if not args.prompt:
-        print("ERROR: --prompt is required for extend mode.", file=sys.stderr)
-        sys.exit(1)
+        fail("MISSING_PROMPT - --prompt is required for extend mode.")
 
     ext_duration = min(args.duration, 10)  # Extension max 10s
     if args.duration > 10:

@@ -1,6 +1,6 @@
 ---
 name: am-image-gen-skill
-version: 1.2.0
+version: 2.6.1
 author: khoidoan
 description: >
   Generate professional images for business: logo, banner, product photography, model+product, mockup.
@@ -14,7 +14,19 @@ description: >
 
 # Image Generation Skill
 
-Converted from hc-image-gen-skill v2.4.0.
+## 🔴 Critical Rule — ALWAYS Deliver Result
+
+**Script `generate.py` chạy xong = BẮT BUỘC gọi `SendMessage` gửi ảnh cho user NGAY trong cùng turn.**
+- KHÔNG kết thúc turn mà chưa gửi ảnh
+- KHÔNG để user phải hỏi lại "ảnh đâu?"
+- Nếu generate nhiều ảnh (`--count`) → gửi TỪNG ảnh qua SendMessage
+- Nếu fail → vẫn phải báo user lỗi gì, KHÔNG im lặng
+
+**🔴 Retry & Progress — KHÔNG chờ user hỏi:**
+- Script fail lần 1 → **báo user ngay** "API lỗi, đang retry..." rồi mới retry
+- Retry lần 2 fail → **báo user ngay** lỗi cụ thể + đề xuất hướng khác
+- KHÔNG im lặng chờ retry xong mới nói — user phải biết đang xảy ra gì
+- Script chạy > 90s chưa có kết quả → báo user "Đang chờ API, hơi lâu hôm nay"
 
 ## Load Strategy
 
@@ -101,7 +113,7 @@ User request
 │       ├─ "kiểu như này" → UC1 (Style Ref)
 │       ├─ "đổi/xóa nền" → UC6 (BG Replace)
 │       ├─ "mở rộng/resize" → UC7 (Outpaint)
-│       ├─ "thêm text/chữ" → UC8 (Text Overlay)
+│       ├─ "thêm text/chữ" → UC8 (Text in Image — LLM render, KHÔNG overlay thủ công)
 │       ├─ "mặc thử/try on" → UC13 (Try-On)
 │       ├─ "mockup/đặt lên" → UC15 (3D Mockup)
 │       ├─ Logo + wants banner → UC3
@@ -154,7 +166,7 @@ Length: 50w (logo) → 400w (complex). Detail = `references/build-guide.md`.
 2. No style contradictions?
 3. Elements ≤ 7, text ≤ 3?
 4. Lighting named specifically?
-5. Vietnamese text exact with diacritics? → **≤ 3 từ thường OK, >3 từ có dấu có thể sai** → warn user + gợi ý overlay text riêng (Canva/Figma) nếu critical
+5. Vietnamese text with diacritics? → **Luôn đưa vào prompt cho LLM render** (gpt-image-2 xử lý text tốt). Ghi exact text trong prompt. Nếu kết quả sai chữ → retry với prompt nhấn mạnh hơn (ALL CAPS instruction, repeat text). KHÔNG tự overlay bằng ImageMagick/FFmpeg.
 
 ### Step 5: Confirm Before Generate
 
@@ -200,11 +212,36 @@ python3 <skill_path>/scripts/generate.py \
 
 **Size defaults:** Logo→`1024x1024` | Social/Model/Poster→`1024x1792` | Web banner→`1792x1024` | Product→`1024x1024`
 
-**After script prints OK:**
-1. Send file: `SendMessage(action=send, filePath=<output path>, caption=<brief description>)`
-2. Self-evaluate: subject intact? text correct? style match?
-3. Defect obvious → adjust prompt, re-run script
-4. Acceptable → note imperfections + ask "Cần điều chỉnh gì không?"
+**🔴 MUST SEND RESULT — KHÔNG ĐƯỢC KẾT THÚC TURN MÀ CHƯA GỬI ẢNH:**
+
+Script stdout sẽ in ra 1 trong 3 loại marker:
+- `PROGRESS: ...` → **Báo user ngay** đang retry, không chờ
+- `FAILED: ...` → **Báo user ngay** lỗi gì + đề xuất (sửa prompt / thử lại / hướng khác)
+- `/path/to/output.jpg` → **Gửi ảnh ngay** qua SendMessage
+
+Sau khi script in ra output path:
+1. **NGAY LẬP TỨC** gọi `SendMessage(action=send, filePath=<output path>, caption=<brief description>)`
+2. **Nếu SendMessage FAIL** (file quá lớn, timeout, Telegram reject):
+   a. Check file size: `ls -lh <output path>`
+   b. Nếu > 10MB → compress: `convert <path> -quality 80 -resize 2048x2048\> <path_compressed.jpg>` rồi gửi lại
+   c. Nếu vẫn fail → thử gửi bằng `asDocument: true`
+   d. Nếu tất cả fail → **BÁO USER NGAY**: "Ảnh đã tạo xong nhưng gửi bị lỗi [chi tiết]. Đang thử lại..."
+   e. KHÔNG BAO GIỜ im lặng khi SendMessage fail
+3. Self-evaluate: subject intact? text correct? style match?
+4. Defect obvious → adjust prompt, re-run script → gửi lại
+5. Acceptable → note imperfections + ask "Cần điều chỉnh gì không?"
+
+⚠️ **Anti-patterns (CẤM):**
+- Script chạy xong → agent kết thúc turn mà quên SendMessage → ĐÃ XẢY RA NHIỀU LẦN
+- Script retry → im lặng chờ → user không biết đang xảy ra gì
+- Script fail → không báo → user tưởng đang chạy
+- **SendMessage fail → im lặng** → ảnh tạo xong nhưng user không nhận được
+
+**⚠️ Script buffering:** Bash tool buffer stdout cho đến khi script kết thúc. Nếu script chạy > 60s → dùng `timeout` và check exit code:
+```bash
+timeout 180 python3 <skill_path>/scripts/generate.py --prompt "..." ... ; echo "EXIT:$?"
+```
+Nếu exit code != 0 → đọc stdout cho FAILED marker → báo user ngay.
 
 **If script fails after retries:**
 
@@ -258,8 +295,20 @@ Save base prompt after first approval. Subsequent: swap product description only
 ### UC7: Outpainting
 `"Extend canvas from [ORIGINAL] to [TARGET RATIO]. Keep original intact in center. Seamlessly continue [environment] into new areas."`
 
-### UC8: Text Overlay
-`"Keep image as-is. Add [EXACT TEXT] in [FONT] [COLOR] at [POSITION]. [Optional: semi-transparent banner for readability]. Don't alter original."`
+### UC8: Text in Image
+**🔴 LUÔN đưa text vào prompt cho LLM render. KHÔNG tự overlay bằng ImageMagick/FFmpeg/drawtext.**
+
+Nếu có ảnh gốc (ref image):
+`"Keep the image exactly as shown. Render the text [EXACT TEXT] in [FONT STYLE] [COLOR] at [POSITION]. The text must be pixel-perfect, no typos. [Optional: semi-transparent dark banner behind text for readability]. Do not alter the original image content."`
+
+Nếu tạo mới:
+`"Create [SCENE/DESIGN]. Include the text [EXACT TEXT] rendered in [FONT STYLE] [COLOR] at [POSITION]. Text must be sharp, correctly spelled, and readable."`
+
+Tips cho text chính xác:
+- Ghi text EXACT trong prompt, bao bằng ngoặc kép: `the text "SALE 50%"`
+- Viết thêm instruction: `spell each letter exactly as given`
+- Tiếng Việt có dấu: ghi rõ từng chữ + thêm `Vietnamese diacritics must be exact`
+- Nếu output sai chữ → retry với nhấn mạnh mạnh hơn, KHÔNG chuyển sang overlay thủ công
 
 ### UC9: Moodboard
 `"Combine: from image 1 take [composition], from image 2 take [palette], from image 3 take [lighting]. Subject: [NEW]. Ensure coherence."`

@@ -1,6 +1,6 @@
 ---
 name: am-video-gen-skill
-version: 2.6.0
+version: 2.7.0
 author: khoidoan
 description: >
   Generate, edit, and extend short videos using xAI grok-imagine-video.
@@ -11,6 +11,24 @@ description: >
 ---
 
 # Video Generation Skill
+
+## 🔴 Critical Rule — ALWAYS Deliver Result
+
+**Script `generate.py` chạy xong = BẮT BUỘC gọi `SendMessage` gửi video cho user NGAY trong cùng turn.**
+- KHÔNG kết thúc turn mà chưa gửi video
+- KHÔNG để user phải hỏi lại "video đâu?"
+- Nếu fail → vẫn phải báo user lỗi gì, KHÔNG im lặng
+
+**🔴 Retry & Progress — KHÔNG chờ user hỏi:**
+- Script fail/retry → **báo user ngay** "API lỗi, đang retry..."
+- All retries fail → **báo user ngay** lỗi cụ thể + đề xuất hướng khác
+- Video gen > 3 phút chưa có kết quả → báo user "Đang chờ API, lâu hơn bình thường"
+- KHÔNG im lặng chờ xong mới nói
+
+**Script stdout markers:**
+- `PROGRESS: ...` → **Báo user ngay** đang retry/chờ
+- `FAILED: ...` → **Báo user ngay** lỗi gì + đề xuất
+- `/path/to/output.mp4` → **Gửi video ngay** qua SendMessage
 
 ## Load Strategy
 
@@ -59,9 +77,11 @@ python3 skills/am-video-gen-skill/scripts/generate.py \
 - `--image` và `--refs` KHÔNG dùng cùng lúc
 - Edit/extend KHÔNG hỗ trợ custom duration/ratio/res — inherits từ input video
 - Extension max 10s (auto-clamped)
-- Luôn dùng `scripts/generate.py`, KHÔNG dùng `VideoCreate` built-in
+- Luôn dùng `scripts/generate.py` hoặc `scripts/seedance.py`, KHÔNG dùng `VideoCreate` built-in
 
-**⚙️ Required env vars:** `OPENAI_BASE_URL` + `OPENAI_API_KEY`
+**⚙️ Required env vars:**
+- **grok-imagine-video:** `OPENAI_BASE_URL` + `OPENAI_API_KEY`
+- **Seedance 2.0:** `ARK_API_KEY` + `BYTEPLUS_ARK_BASE_URL` + `SEEDANCE_MODEL` + `SEEDANCE_FAST_MODEL`
 
 **⏱️ Timing:**
 - Text-to-video: ~60-90s (5s) / ~120-180s (10s) / ~180-240s (15s)
@@ -276,9 +296,25 @@ python3 -u skills/am-video-gen-skill/scripts/generate.py \
 
 **🔴 Image-to-video: ALWAYS run `--analyze` first, add `--crop` if recommended.**
 
-**Flags:** `-u` = unbuffered progress. Env vars xem TOOLS.md "Hubcom LLM Proxy".
+**Flags:** `-u` = unbuffered progress. Set `OPENAI_BASE_URL` + `OPENAI_API_KEY` env vars.
 
-**After success:** `SendMessage(action=send, filePath=<output>, caption=<description>)`
+**🔴 MUST SEND RESULT — KHÔNG ĐƯỢC KẾT THÚC TURN MÀ CHƯA GỬI VIDEO:**
+
+Sau khi script in ra output path:
+1. **NGAY LẬP TỨC** gọi `SendMessage(action=send, filePath=<output path>, caption=<description>)`
+2. **Nếu SendMessage FAIL** (file quá lớn, timeout, Telegram reject):
+   a. Check file size: `ls -lh <output path>`
+   b. Nếu > 50MB → compress: `ffmpeg -i <path> -b:v 2M -maxrate 3M -bufsize 4M <compressed.mp4>` rồi gửi lại
+   c. Nếu vẫn fail → thử gửi bằng `asDocument: true`
+   d. Nếu tất cả fail → **BÁO USER NGAY**: "Video đã tạo xong nhưng gửi bị lỗi [chi tiết]. Đang thử lại..."
+   e. KHÔNG BAO GIỜ im lặng khi SendMessage fail
+3. Ask "Cần điều chỉnh gì không?"
+
+⚠️ **Anti-patterns (CẤM):**
+- Script chạy xong → agent kết thúc turn mà quên SendMessage → ĐÃ XẢY RA NHIỀU LẦN
+- Script retry → im lặng chờ → user không biết đang xảy ra gì
+- Script fail → không báo → user tưởng đang chạy
+- **SendMessage fail → im lặng** → video tạo xong nhưng user không nhận được
 
 **Error handling:**
 
@@ -353,7 +389,58 @@ ffmpeg -i input.mp4 -t 3 -vf "fps=12,scale=480:-1" -loop 0 output.gif
 | YouTube/Web | 16:9 | 5-15s |
 | Instagram post | 1:1 | 5-10s |
 
+## Tool: `scripts/seedance.py` (Seedance 2.0 — Alternative)
+
+**Khi nào dùng Seedance thay grok-imagine-video:**
+- grok timeout/fail liên tục → chuyển Seedance làm fallback
+- User yêu cầu nhanh (fast model ~40s vs grok ~90s)
+- User muốn 1080p (Seedance 1080p ổn định hơn)
+
+```bash
+python3 skills/am-video-gen-skill/scripts/seedance.py \
+  --prompt "..." \
+  --duration 5 \
+  --aspect-ratio 9:16 \
+  --resolution 720p \
+  [--image photo.jpg] \
+  [--fast]
+```
+
+| Param | Values | Note |
+|-------|--------|------|
+| `--prompt` | English string | Required |
+| `--duration` | `5` \| `10` \| `15` | Only these 3 values |
+| `--aspect-ratio` | Same as grok | Default: `16:9` |
+| `--resolution` | `480p`\|`720p`\|`1080p` | Default: `720p` |
+| `--image` | File path | Image-to-video |
+| `--fast` | flag | Fast model (~40s vs ~108s) |
+| `--output` | File path | Default: `outbound/vid-TIMESTAMP-seedance.mp4` |
+
+**⚠️ Seedance limitations vs grok:**
+- KHÔNG có reference-to-video (`--refs`)
+- KHÔNG có edit/extend mode
+- Duration chỉ 3 giá trị (5/10/15), không tùy chỉnh
+- Text-to-video + image-to-video only
+
+**⚙️ Required env vars:** `ARK_API_KEY` + `BYTEPLUS_ARK_BASE_URL` + `SEEDANCE_MODEL` + `SEEDANCE_FAST_MODEL`
+
+---
+
+**🔴 Text trong video:** Luôn tạo video KHÔNG text trước, overlay text sau (CapCut/Canva). Model render text sai gần như chắc chắn. Nếu user yêu cầu text → tư vấn overlay sau, KHÔNG thêm vào prompt.
+
 ## Changelog
+
+### v2.7.0 (2026-05-27)
+- **Critical Rule:** Delivery enforcement — MUST SendMessage after generate, never end turn silently
+- **Seedance 2.0:** Alt engine documented (text/image-to-video, fast mode ~40s) + `scripts/seedance.py`
+- **Text overlay rule:** Always render video without text, overlay later
+- **PROGRESS/FAILED markers:** stdout markers for agent to notify user
+- **SendMessage fail handling:** compress (ffmpeg) → asDocument → notify user
+- **Anti-patterns:** 4 banned patterns documented
+
+### v2.6.0 (2026-05-26)
+- Delivery enforcement, PROGRESS/FAILED stdout markers in generate.py
+- SendMessage fail handling, anti-patterns
 
 ### v2.5.0 (2026-05-21)
 - **Improve:** Submit timeout 60s→120s (large payload support for video/image base64)
